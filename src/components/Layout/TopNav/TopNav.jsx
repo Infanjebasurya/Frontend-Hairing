@@ -38,6 +38,7 @@ const TopNav = ({ darkMode, user, isSidebarCollapsed, onToggleSidebar, onOpenFee
     if (path === '/') return 'Dashboard';
     if (path === '/user') return 'User Management';
     if (path === '/hiring-form') return 'Hiring Form';
+    if (path.startsWith('/job-role')) return 'Questions Generation';
     if (path === '/chat' || path === '/chat/new') return 'Chat';
     if (path === '/search') return 'Search';
     if (path === '/plans') return 'Upgrade Plan';

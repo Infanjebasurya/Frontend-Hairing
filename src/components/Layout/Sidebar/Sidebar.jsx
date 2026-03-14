@@ -28,6 +28,7 @@ import HomeIcon from '@mui/icons-material/Home';
 import PeopleIcon from '@mui/icons-material/People';
 import WorkIcon from '@mui/icons-material/Work'; // Hiring Form icon
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday'; // ADD THIS IMPORT for Job Interviews
+import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import SidebarHeader from './SidebarHeader';
 import MenuSection from './MenuSection';
 import ProgressBar from '../../Common/ProgressBar';
@@ -108,6 +109,11 @@ const Sidebar = ({
     if (isMobile) onMobileClose();
   };
 
+  const handleJobRoleClick = () => {
+    navigate('/job-role');
+    if (isMobile) onMobileClose();
+  };
+
   const handleToggleSidebarClick = () => {
     if (onToggleSidebar) {
       onToggleSidebar();
@@ -117,7 +123,7 @@ const Sidebar = ({
 
   // Check if current route is active
   const isActiveRoute = (path) => {
-    return location.pathname === path;
+    return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
   // Mobile drawer content
@@ -684,6 +690,102 @@ const Sidebar = ({
                 />
               </ListItemIcon>
               <ListItemText>Job Interviews</ListItemText>
+            </MenuItem>
+          )}
+
+          {/* Questions Generation Menu Item */}
+          {isMobile ? (
+            <MenuItem
+              onClick={handleJobRoleClick}
+              sx={{
+                color: isActiveRoute('/job-role') ? 'primary.main' : 'text.secondary',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                borderRadius: 1,
+                minHeight: 40,
+                margin: 0,
+                bgcolor: isActiveRoute('/job-role') ? 'action.selected' : 'transparent',
+                outline: 'none',
+                '&:focus': {
+                  outline: 'none',
+                  bgcolor: isActiveRoute('/job-role') ? 'action.selected' : 'transparent',
+                },
+                '&:focus-visible': {
+                  outline: 'none',
+                },
+                '&:hover': {
+                  color: 'primary.main',
+                  bgcolor: 'action.hover'
+                }
+              }}
+            >
+              <ListItemIcon>
+                <AssignmentIndIcon
+                  fontSize="small"
+                  sx={{ color: isActiveRoute('/job-role') ? 'primary.main' : 'text.secondary' }}
+                />
+              </ListItemIcon>
+              <ListItemText>Questions Generation</ListItemText>
+            </MenuItem>
+          ) : isSidebarCollapsed ? (
+            <Tooltip title="Questions Generation" placement="right">
+              <IconButton
+                onClick={handleJobRoleClick}
+                sx={{
+                  color: isActiveRoute('/job-role') ? 'primary.main' : 'text.secondary',
+                  width: '100%',
+                  height: 40,
+                  margin: 0,
+                  bgcolor: isActiveRoute('/job-role') ? 'action.selected' : 'transparent',
+                  outline: 'none',
+                  '&:focus': {
+                    outline: 'none',
+                    boxShadow: 'none',
+                  },
+                  '&:focus-visible': {
+                    outline: 'none',
+                  },
+                  '&:hover': {
+                    color: 'primary.main',
+                    bgcolor: 'action.hover'
+                  }
+                }}
+              >
+                <AssignmentIndIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          ) : (
+            <MenuItem
+              onClick={handleJobRoleClick}
+              sx={{
+                color: isActiveRoute('/job-role') ? 'primary.main' : 'text.secondary',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                borderRadius: 1,
+                minHeight: 40,
+                margin: 0,
+                bgcolor: isActiveRoute('/job-role') ? 'action.selected' : 'transparent',
+                outline: 'none',
+                '&:focus': {
+                  outline: 'none',
+                  bgcolor: isActiveRoute('/job-role') ? 'action.selected' : 'transparent',
+                },
+                '&:focus-visible': {
+                  outline: 'none',
+                },
+                '&:hover': {
+                  color: 'primary.main',
+                  bgcolor: 'action.hover'
+                }
+              }}
+            >
+              <ListItemIcon>
+                <AssignmentIndIcon
+                  fontSize="small"
+                  sx={{ color: isActiveRoute('/job-role') ? 'primary.main' : 'text.secondary' }}
+                />
+              </ListItemIcon>
+              <ListItemText>Questions Generation</ListItemText>
             </MenuItem>
           )}
         </Box>
