@@ -16,6 +16,7 @@ import Settings from './components/Layout/Settings/Settings';
 import Home from './components/Layout/Home/Home';
 import User from './components/Layout/User/User';
 import HiringForm from './components/HiringForm/HiringForm';
+import JobRole from './components/Layout/JobRole/JobRole';
 import JobInterviews from './components/Layout/JobInterview/JobInterview';
 import CreateNewProcess from './components/Layout/JobInterview/CreateNewProcess/CreateNewProcess';
 import EditJobInterview from './components/Layout/JobInterview/EditJobInterview';
@@ -460,6 +461,17 @@ function MainAppContent() {
             <ProtectedRoute requireUser={true}>
               <MainLayout {...layoutProps}>
                 <JobInterviews darkMode={darkMode} />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/job-role/*"
+          element={
+            <ProtectedRoute requireUser={true}>
+              <MainLayout {...layoutProps}>
+                <JobRole />
               </MainLayout>
             </ProtectedRoute>
           }
