@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Checkbox,
@@ -36,6 +37,8 @@ import QuestionsGenerationLayout from '../components/QuestionsGenerationLayout';
 import { useJobRole } from '../useJobRole';
 import { difficultyOptions, questionTypeDefinitions, skillTopicOptions, sortOptions } from '../questionGenerationData';
 
+const ENABLE_BANK_NEW_QUESTION = false;
+
 const emptyDraft = {
   question: '',
   type: 'Theory',
@@ -47,6 +50,7 @@ const emptyDraft = {
 const QuestionBankPage = () => {
   const navigate = useNavigate();
   const {
+    jobDetails,
     filteredQuestionBank,
     searchTerm,
     setSearchTerm,
@@ -70,6 +74,7 @@ const QuestionBankPage = () => {
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [draftQuestion, setDraftQuestion] = useState(emptyDraft);
   const [isDraftDialogOpen, setIsDraftDialogOpen] = useState(false);
+  const [assignJobId, setAssignJobId] = useState(jobDetails.jobId);
 
   const allVisibleSelected =
     filteredQuestionBank.length > 0 && filteredQuestionBank.every((row) => selectedQuestionIds.includes(row.id));
@@ -132,7 +137,7 @@ const QuestionBankPage = () => {
   };
 
   const handleContinueToReview = () => {
-    assignSelectedBankQuestionsToJob();
+    assignSelectedBankQuestionsToJob(assignJobId);
     navigate('/job-role/review');
   };
 
@@ -145,13 +150,21 @@ const QuestionBankPage = () => {
         <Button variant="outlined" startIcon={<DownloadOutlinedIcon />} onClick={handleExport}>
           Export
         </Button>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
-          New Question
-        </Button>
+        {ENABLE_BANK_NEW_QUESTION && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+            New Question
+          </Button>
+        )}
       </Stack>
 
       <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
         <Stack spacing={3}>
+          {!ENABLE_BANK_NEW_QUESTION && (
+            <Alert severity="info" sx={{ borderRadius: 2 }}>
+              Creating new questions from the bank is temporarily disabled. Create questions from job details, then they'll appear here.
+            </Alert>
+          )}
+
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
               <TextField
@@ -210,6 +223,49 @@ const QuestionBankPage = () => {
               <Button fullWidth variant="text" sx={{ height: '56px' }} onClick={resetFilters}>
                 Clear
               </Button>
+            </Grid>
+          </Grid>
+
+          <Box
+            sx={{
+              p: 2,
+              border: '1px dashed',
+              borderColor: 'divider',
+              borderRadius: 2,
+              bgcolor: 'background.paper',
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              Filters (Space for Improvements)
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Reserved for advanced filters like Question Type, Points range, and Assigned Job ID.
+            </Typography>
+          </Box>
+
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Assign selected questions to Job ID"
+                value={assignJobId}
+                onChange={(event) => setAssignJobId(event.target.value)}
+                placeholder="e.g., JOB-2026-014"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent={{ xs: 'stretch', sm: 'flex-end' }}>
+                <Button
+                  variant="outlined"
+                  disabled={!selectedQuestionIds.length || !assignJobId.trim()}
+                  onClick={() => assignSelectedBankQuestionsToJob(assignJobId)}
+                >
+                  Assign Selected
+                </Button>
+                <Button variant="text" onClick={() => navigate('/job-role/filter')}>
+                  Improve Filters
+                </Button>
+              </Stack>
             </Grid>
           </Grid>
 
