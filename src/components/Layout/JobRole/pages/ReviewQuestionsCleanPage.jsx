@@ -66,6 +66,18 @@ const ReviewQuestionsCleanPage = () => {
       );
     }
 
+    if (question.blankAnswers) {
+      return (
+        <List dense sx={{ py: 0 }}>
+          {(question.blankAnswers || []).map((answer, index) => (
+            <ListItem key={`${question.id}-blank-${index}`} sx={{ px: 0 }}>
+              <ListItemText primary={`Blank ${index + 1}: ${answer || '(empty)'}`} />
+            </ListItem>
+          ))}
+        </List>
+      );
+    }
+
     if (question.pairs) {
       return (
         <List dense sx={{ py: 0 }}>
@@ -87,6 +99,22 @@ const ReviewQuestionsCleanPage = () => {
             </ListItem>
           ))}
         </List>
+      );
+    }
+
+    if (question.starterCode || question.expectedOutput || question.evaluationNotes) {
+      return (
+        <Stack spacing={1}>
+          {question.starterCode && (
+            <TextField fullWidth label="Starter Code" value={question.starterCode} multiline minRows={4} InputProps={{ readOnly: true }} />
+          )}
+          {question.expectedOutput && (
+            <TextField fullWidth label="Expected Output" value={question.expectedOutput} InputProps={{ readOnly: true }} />
+          )}
+          {question.evaluationNotes && (
+            <TextField fullWidth label="Evaluation Notes" value={question.evaluationNotes} multiline minRows={2} InputProps={{ readOnly: true }} />
+          )}
+        </Stack>
       );
     }
 
@@ -283,6 +311,16 @@ const ReviewQuestionsCleanPage = () => {
                 <Chip label={previewQuestion.difficulty} variant="outlined" />
               </Stack>
               {renderPreview(previewQuestion)}
+              {previewQuestion.answer && (
+                <Stack spacing={0.5}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Answer
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                    {previewQuestion.answer}
+                  </Typography>
+                </Stack>
+              )}
               <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
                 {previewQuestion.details.map((detail) => (
                   <Chip key={detail} label={detail} size="small" variant="outlined" />

@@ -10,7 +10,7 @@ import { questionTypeDefinitions } from '../questionGenerationData';
 
 const QuestionTypePage = () => {
   const navigate = useNavigate();
-  const { questionSource, questionType, setQuestionType, createQuestionFromSettings } = useJobRole();
+  const { questionType, setQuestionType } = useJobRole();
   const featuredTypes = [
     { key: 'single_correct', title: 'Multiple Choice Question', description: 'Candidates select one or more correct options from a list.', icon: <ChecklistRoundedIcon color="primary" /> },
     { key: 'practical', title: 'Coding Question', description: 'Candidates write and execute code against predefined test cases.', icon: <CodeRoundedIcon color="primary" /> },
@@ -18,10 +18,6 @@ const QuestionTypePage = () => {
   ];
 
   const handleContinue = () => {
-    if (questionSource === 'new_set') {
-      createQuestionFromSettings();
-    }
-
     navigate('/job-role/review');
   };
 

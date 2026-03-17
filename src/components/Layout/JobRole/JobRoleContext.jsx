@@ -39,8 +39,13 @@ export const JobRoleProvider = ({ children }) => {
   const storedState = loadStoredState();
   const [jobDetails, setJobDetails] = useState(storedState?.jobDetails || defaultJobDetails);
   const [questionSource, setQuestionSource] = useState(storedState?.questionSource || 'bank');
+  const [newSetMode, setNewSetMode] = useState(storedState?.newSetMode || 'automatic');
   const [questionType, setQuestionType] = useState(storedState?.questionType || 'theory');
   const [numberOfQuestions, setNumberOfQuestions] = useState(storedState?.numberOfQuestions || 6);
+  const [automaticPlanRows, setAutomaticPlanRows] = useState(
+    storedState?.automaticPlanRows || [{ id: 'AUTO-1', questionType: 'theory', count: 6 }]
+  );
+  const [manualDraftQuestions, setManualDraftQuestions] = useState(storedState?.manualDraftQuestions || []);
   const [searchTerm, setSearchTerm] = useState('');
   const [topicFilter, setTopicFilter] = useState('All Topics');
   const [difficultyFilter, setDifficultyFilter] = useState('All Levels');
@@ -58,8 +63,11 @@ export const JobRoleProvider = ({ children }) => {
       JSON.stringify({
         jobDetails,
         questionSource,
+        newSetMode,
         questionType,
         numberOfQuestions,
+        automaticPlanRows,
+        manualDraftQuestions,
         questionBank,
         generatedQuestionList,
         selectedQuestionIds,
@@ -69,9 +77,12 @@ export const JobRoleProvider = ({ children }) => {
       })
     );
   }, [
+    automaticPlanRows,
     finalizedOutput,
     generatedQuestionList,
     jobDetails,
+    manualDraftQuestions,
+    newSetMode,
     numberOfQuestions,
     questionBank,
     questionSource,
@@ -231,18 +242,218 @@ export const JobRoleProvider = ({ children }) => {
     setSelectedGeneratedIds((prev) => prev.filter((id) => id !== questionId));
   };
 
-  const assignSelectedBankQuestionsToJob = () => {
+  const assignSelectedBankQuestionsToJob = (jobIdOverride) => {
+    const normalizedJobId = typeof jobIdOverride === 'string' ? jobIdOverride.trim() : '';
+    const jobId = normalizedJobId || jobDetails.jobId;
+
     setQuestionBank((prev) =>
       prev.map((row) =>
         selectedQuestionIds.includes(row.id)
           ? {
               ...row,
-              assignedJobId: jobDetails.jobId,
+              assignedJobId: jobId,
               updatedAt: 'Assigned just now',
             }
           : row
       )
     );
+  };
+
+  const replaceGeneratedQuestions = (questions) => {
+    setGeneratedQuestionList(questions);
+    setSelectedGeneratedIds(questions.map((question) => question.id));
+  };
+
+  const appendGeneratedQuestions = (questions) => {
+    setGeneratedQuestionList((prev) => [...questions, ...prev]);
+    setSelectedGeneratedIds((prev) => [...questions.map((question) => question.id), ...prev]);
+  };
+
+  const buildGeneratedQuestion = ({ questionTypeValue, ordinal }) => {
+    const questionTypeLabel =
+      questionTypeDefinitions.find((item) => item.value === questionTypeValue)?.label || 'Theory';
+    const normalizedType = (questionTypeValue || 'theory').toLowerCase();
+    const activeSkills = Object.values(jobDetails.skills).flat().slice(0, 3);
+    const baseId = `GQ-${Date.now()}-${ordinal}`;
+
+    const question = {
+      id: baseId,
+      type: questionTypeLabel,
+      difficulty: numberOfQuestions > 8 ? 'Hard' : numberOfQuestions > 4 ? 'Medium' : 'Easy',
+      prompt: `Create a ${questionTypeLabel.toLowerCase()} interview question for ${jobDetails.jobRole} focused on ${activeSkills.join(', ')}.`,
+      details: [
+        `Job ID: ${jobDetails.jobId}`,
+        `Experience: ${jobDetails.experienceYears}y ${jobDetails.experienceMonths}m`,
+        ...(questionTypeCoverage[questionTypeValue] || []).slice(0, 2),
+      ],
+    };
+
+    if (normalizedType === 'single_correct' || normalizedType === 'multiple_correct') {
+      question.options = ['Option A', 'Option B', 'Option C', 'Option D'];
+      question.details.push('Options configured: 4');
+    }
+
+    if (normalizedType === 'fill_blanks') {
+      question.blanks = 3;
+      question.blankAnswers = ['Answer 1', 'Answer 2', 'Answer 3'];
+      question.details.push('Blanks configured: 3');
+    }
+
+    if (normalizedType === 'matching') {
+      question.pairs = [
+        ['Skill', 'Assessment'],
+        ['Framework', 'Use case'],
+        ['Workflow', 'Outcome'],
+      ];
+    }
+
+    if (normalizedType === 'sequence') {
+      question.orderedItems = ['Review job details', 'Select question type', 'Generate question', 'Assign to job ID'];
+    }
+
+    return question;
+  };
+
+  const createNewSetFromAutomaticPlan = (planRows, totalQuestionsOverride) => {
+    const totalLimitRaw = Number.isFinite(Number(totalQuestionsOverride))
+      ? Number(totalQuestionsOverride)
+      : jobDetails.totalQuestions;
+    const totalLimit = Math.max(0, Math.floor(totalLimitRaw || 0));
+
+    const rows = (planRows || []).filter((row) => row && Number(row.count) > 0 && row.questionType);
+
+    const generated = [];
+    let ordinal = 1;
+    for (const row of rows) {
+      const count = Math.max(0, Math.floor(Number(row.count) || 0));
+      for (let index = 0; index < count; index += 1) {
+        if (totalLimit && generated.length >= totalLimit) {
+          break;
+        }
+
+        generated.push(buildGeneratedQuestion({ questionTypeValue: row.questionType, ordinal }));
+        ordinal += 1;
+      }
+
+      if (totalLimit && generated.length >= totalLimit) {
+        break;
+      }
+    }
+
+    replaceGeneratedQuestions(generated);
+    return generated;
+  };
+
+  const createNewSetFromManualDrafts = (drafts, totalQuestionsOverride) => {
+    const totalLimitRaw = Number.isFinite(Number(totalQuestionsOverride))
+      ? Number(totalQuestionsOverride)
+      : jobDetails.totalQuestions;
+    const totalLimit = Math.max(0, Math.floor(totalLimitRaw || 0));
+
+    const normalizedDrafts = (drafts || [])
+      .map((draft) => ({
+        id: draft?.id || `MAN-${Date.now()}`,
+        questionType: draft?.questionType || 'theory',
+        prompt: (draft?.prompt || '').trim(),
+        answerText: (draft?.answerText || draft?.answer || '').trim(),
+        options: Array.isArray(draft?.options) ? draft.options.map((item) => String(item ?? '').trim()).filter(Boolean) : [],
+        correctOptionIndex: Number.isFinite(Number(draft?.correctOptionIndex)) ? Number(draft.correctOptionIndex) : 0,
+        correctOptionIndexes: Array.isArray(draft?.correctOptionIndexes) ? draft.correctOptionIndexes : [],
+        blanks: Number.isFinite(Number(draft?.blanks)) ? Math.max(1, Math.floor(Number(draft.blanks))) : 1,
+        blankAnswers: Array.isArray(draft?.blankAnswers) ? draft.blankAnswers.map((item) => String(item ?? '').trim()) : [],
+        pairs: Array.isArray(draft?.pairs) ? draft.pairs : [],
+        orderedItems: Array.isArray(draft?.orderedItems) ? draft.orderedItems.map((item) => String(item ?? '').trim()).filter(Boolean) : [],
+        starterCode: (draft?.starterCode || '').trim(),
+        expectedOutput: (draft?.expectedOutput || '').trim(),
+        evaluationNotes: (draft?.evaluationNotes || '').trim(),
+      }))
+      .filter((draft) => draft.prompt);
+
+    const limitedDrafts = totalLimit ? normalizedDrafts.slice(0, totalLimit) : normalizedDrafts;
+    const generated = limitedDrafts.map((draft, index) => {
+      const questionTypeLabel =
+        questionTypeDefinitions.find((item) => item.value === draft.questionType)?.label || 'Theory';
+      const normalizedType = (draft.questionType || 'theory').toLowerCase();
+      const ensurePromptHasBlanks = (prompt, blanks) => {
+        if (!prompt) return prompt;
+        if (prompt.includes('___')) return prompt;
+
+        const blankToken = '___';
+        const suffix =
+          blanks <= 1
+            ? ` ${blankToken}.`
+            : ` ${Array.from({ length: blanks }, () => blankToken).join(', ')}.`;
+
+        return `${prompt.replace(/[.\\s]+$/u, '')}${suffix}`;
+      };
+
+      const manualQuestion = {
+        id: `GQ-MAN-${Date.now()}-${index + 1}`,
+        type: questionTypeLabel,
+        difficulty: 'Manual',
+        prompt: draft.prompt,
+        details: [`Job ID: ${jobDetails.jobId}`, 'Source: Manual'],
+      };
+
+      if (normalizedType === 'short_answer' || normalizedType === 'theory') {
+        manualQuestion.answer = draft.answerText;
+      }
+
+      if (normalizedType === 'single_correct') {
+        const options = draft.options.length ? draft.options : ['Option A', 'Option B', 'Option C', 'Option D'];
+        const correctIndex = Math.min(Math.max(0, Math.floor(Number(draft.correctOptionIndex) || 0)), Math.max(0, options.length - 1));
+        manualQuestion.options = options;
+        manualQuestion.correctOptionIndex = correctIndex;
+        manualQuestion.correctAnswer = options[correctIndex] || '';
+        manualQuestion.answer = manualQuestion.correctAnswer;
+      }
+
+      if (normalizedType === 'multiple_correct') {
+        const options = draft.options.length ? draft.options : ['Option A', 'Option B', 'Option C', 'Option D'];
+        const normalizedIndexes = (draft.correctOptionIndexes || [])
+          .map((item) => Math.floor(Number(item)))
+          .filter((value) => Number.isFinite(value) && value >= 0 && value < options.length);
+        manualQuestion.options = options;
+        manualQuestion.correctOptionIndexes = [...new Set(normalizedIndexes)];
+        manualQuestion.correctAnswers = manualQuestion.correctOptionIndexes.map((idx) => options[idx]).filter(Boolean);
+        manualQuestion.answer = manualQuestion.correctAnswers.join(', ');
+      }
+
+      if (normalizedType === 'fill_blanks') {
+        const blanks = Math.max(1, Math.floor(Number(draft.blanks) || 1));
+        const answers = (draft.blankAnswers || []).slice(0, blanks);
+        while (answers.length < blanks) {
+          answers.push('');
+        }
+        manualQuestion.prompt = ensurePromptHasBlanks(draft.prompt, blanks);
+        manualQuestion.blanks = blanks;
+        manualQuestion.blankAnswers = answers;
+        manualQuestion.answer = answers.filter(Boolean).join(' | ');
+      }
+
+      if (normalizedType === 'matching') {
+        const pairs = (draft.pairs || [])
+          .map((pair) => [String(pair?.left ?? '').trim(), String(pair?.right ?? '').trim()])
+          .filter(([left, right]) => left && right);
+        manualQuestion.pairs = pairs.map(([left, right]) => [left, right]);
+      }
+
+      if (normalizedType === 'sequence') {
+        manualQuestion.orderedItems = draft.orderedItems.length ? draft.orderedItems : ['Step 1', 'Step 2'];
+      }
+
+      if (normalizedType === 'practical') {
+        manualQuestion.starterCode = draft.starterCode;
+        manualQuestion.expectedOutput = draft.expectedOutput;
+        manualQuestion.evaluationNotes = draft.evaluationNotes;
+        manualQuestion.answer = draft.answerText;
+      }
+
+      return manualQuestion;
+    });
+
+    replaceGeneratedQuestions(generated);
+    return generated;
   };
 
   const toggleJobSkill = (category, skill) => {
@@ -298,6 +509,7 @@ export const JobRoleProvider = ({ children }) => {
       skills: jobDetails.skills,
       outputFormat: jobDetails.outputFormat,
       questionSource,
+      newSetMode: questionSource === 'new_set' ? newSetMode : undefined,
       questionType: selectedQuestionType?.label || questionType,
       numberOfQuestions,
       enabledCoverage: questionTypeCoverage[questionType] || [],
@@ -324,10 +536,16 @@ export const JobRoleProvider = ({ children }) => {
     setJobDetails,
     questionSource,
     setQuestionSource,
+    newSetMode,
+    setNewSetMode,
     questionType,
     setQuestionType,
     numberOfQuestions,
     setNumberOfQuestions,
+    automaticPlanRows,
+    setAutomaticPlanRows,
+    manualDraftQuestions,
+    setManualDraftQuestions,
     questionTypeCoverage,
     searchTerm,
     setSearchTerm,
@@ -357,6 +575,10 @@ export const JobRoleProvider = ({ children }) => {
     updateGeneratedQuestion,
     deleteGeneratedQuestion,
     assignSelectedBankQuestionsToJob,
+    replaceGeneratedQuestions,
+    appendGeneratedQuestions,
+    createNewSetFromAutomaticPlan,
+    createNewSetFromManualDrafts,
     exportQuestionBank,
     finalizeOutputToJson,
     toggleJobSkill,
