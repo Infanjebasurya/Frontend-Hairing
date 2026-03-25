@@ -101,6 +101,8 @@ const QuestionSettingsPage = () => {
         id: `AUTO-${Date.now()}`,
         questionType: 'theory',
         count: totalQuestions > 0 ? Math.min(1, automaticRemaining) : 1,
+        optionsCount: 4,
+        blanksCount: 3,
       },
     ]);
   };
@@ -762,7 +764,11 @@ const QuestionSettingsPage = () => {
                 </Stack>
               </Box>
 
-              <Dialog open={isNewSetConfigOpen} onClose={() => setIsNewSetConfigOpen(false)} fullWidth maxWidth="md">
+              <Dialog
+                open={isNewSetConfigOpen}
+                onClose={() => setIsNewSetConfigOpen(false)}
+                fullScreen
+              >
                 <DialogTitle>Configure {newSetMode === 'automatic' ? 'Automatic' : 'Manual'} Questions</DialogTitle>
                 <DialogContent dividers>
                   {newSetMode === 'automatic' && (
@@ -832,6 +838,42 @@ const QuestionSettingsPage = () => {
                                 <DeleteOutlineIcon />
                               </IconButton>
                             </Grid>
+
+                            {(row.questionType === 'single_correct' || row.questionType === 'multiple_correct') && (
+                              <Grid item xs={12}>
+                                <TextField
+                                  fullWidth
+                                  type="number"
+                                  label="Number of options"
+                                  value={Math.min(8, Math.max(2, Math.floor(Number(row.optionsCount) || 4)))}
+                                  onChange={(event) =>
+                                    handleUpdateAutomaticRow(row.id, {
+                                      optionsCount: Math.min(8, Math.max(2, Math.floor(Number(event.target.value) || 2))),
+                                    })
+                                  }
+                                  inputProps={{ min: 2, max: 8 }}
+                                  helperText="Used for Single/Multiple correct question generation."
+                                />
+                              </Grid>
+                            )}
+
+                            {row.questionType === 'fill_blanks' && (
+                              <Grid item xs={12}>
+                                <TextField
+                                  fullWidth
+                                  type="number"
+                                  label="Number of blanks"
+                                  value={Math.min(10, Math.max(1, Math.floor(Number(row.blanksCount) || 3)))}
+                                  onChange={(event) =>
+                                    handleUpdateAutomaticRow(row.id, {
+                                      blanksCount: Math.min(10, Math.max(1, Math.floor(Number(event.target.value) || 1))),
+                                    })
+                                  }
+                                  inputProps={{ min: 1, max: 10 }}
+                                  helperText="Used for Fill in the Blanks question generation."
+                                />
+                              </Grid>
+                            )}
                           </Grid>
                         ))}
                         {!automaticPlanRows.length && (
@@ -924,39 +966,41 @@ const QuestionSettingsPage = () => {
                 </DialogActions>
               </Dialog>
 
-              <Stack spacing={1.5}>
-                <FormControl fullWidth>
-                  <InputLabel id="question-type-select-label">Type of Question</InputLabel>
-                  <Select
-                    labelId="question-type-select-label"
-                    label="Type of Question"
-                    value={questionType}
-                    onChange={(event) => setQuestionType(event.target.value)}
-                  >
-                    {questionTypeDefinitions.map((type) => (
-                      <MenuItem key={type.value} value={type.value}>
-                        {type.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+              {questionSource !== 'new_set' && (
+                <Stack spacing={1.5}>
+                  <FormControl fullWidth>
+                    <InputLabel id="question-type-select-label">Type of Question</InputLabel>
+                    <Select
+                      labelId="question-type-select-label"
+                      label="Type of Question"
+                      value={questionType}
+                      onChange={(event) => setQuestionType(event.target.value)}
+                    >
+                      {questionTypeDefinitions.map((type) => (
+                        <MenuItem key={type.value} value={type.value}>
+                          {type.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
-                <FormControl fullWidth>
-                  <InputLabel id="number-of-questions-label">Number of Questions</InputLabel>
-                  <Select
-                    labelId="number-of-questions-label"
-                    label="Number of Questions"
-                    value={numberOfQuestions}
-                    onChange={(event) => setNumberOfQuestions(event.target.value)}
-                  >
-                    {Array.from({ length: jobDetails.totalQuestions }, (_, index) => index + 1).map((count) => (
-                      <MenuItem key={count} value={count}>
-                        {count}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Stack>
+                  <FormControl fullWidth>
+                    <InputLabel id="number-of-questions-label">Number of Questions</InputLabel>
+                    <Select
+                      labelId="number-of-questions-label"
+                      label="Number of Questions"
+                      value={numberOfQuestions}
+                      onChange={(event) => setNumberOfQuestions(event.target.value)}
+                    >
+                      {Array.from({ length: jobDetails.totalQuestions }, (_, index) => index + 1).map((count) => (
+                        <MenuItem key={count} value={count}>
+                          {count}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Stack>
+              )}
 
               <Divider />
 

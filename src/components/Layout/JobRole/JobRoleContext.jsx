@@ -43,7 +43,7 @@ export const JobRoleProvider = ({ children }) => {
   const [questionType, setQuestionType] = useState(storedState?.questionType || 'theory');
   const [numberOfQuestions, setNumberOfQuestions] = useState(storedState?.numberOfQuestions || 6);
   const [automaticPlanRows, setAutomaticPlanRows] = useState(
-    storedState?.automaticPlanRows || [{ id: 'AUTO-1', questionType: 'theory', count: 6 }]
+    storedState?.automaticPlanRows || [{ id: 'AUTO-1', questionType: 'theory', count: 6, optionsCount: 4, blanksCount: 3 }]
   );
   const [manualDraftQuestions, setManualDraftQuestions] = useState(storedState?.manualDraftQuestions || []);
   const [searchTerm, setSearchTerm] = useState('');
@@ -269,7 +269,7 @@ export const JobRoleProvider = ({ children }) => {
     setSelectedGeneratedIds((prev) => [...questions.map((question) => question.id), ...prev]);
   };
 
-  const buildGeneratedQuestion = ({ questionTypeValue, ordinal }) => {
+  const buildGeneratedQuestion = ({ questionTypeValue, ordinal, optionsCount, blanksCount }) => {
     const questionTypeLabel =
       questionTypeDefinitions.find((item) => item.value === questionTypeValue)?.label || 'Theory';
     const normalizedType = (questionTypeValue || 'theory').toLowerCase();
@@ -289,14 +289,16 @@ export const JobRoleProvider = ({ children }) => {
     };
 
     if (normalizedType === 'single_correct' || normalizedType === 'multiple_correct') {
-      question.options = ['Option A', 'Option B', 'Option C', 'Option D'];
-      question.details.push('Options configured: 4');
+      const normalizedOptionsCount = Math.min(8, Math.max(2, Math.floor(Number(optionsCount) || 4)));
+      question.options = Array.from({ length: normalizedOptionsCount }, (_, index) => `Option ${String.fromCharCode(65 + index)}`);
+      question.details.push(`Options configured: ${normalizedOptionsCount}`);
     }
 
     if (normalizedType === 'fill_blanks') {
-      question.blanks = 3;
-      question.blankAnswers = ['Answer 1', 'Answer 2', 'Answer 3'];
-      question.details.push('Blanks configured: 3');
+      const normalizedBlanksCount = Math.min(10, Math.max(1, Math.floor(Number(blanksCount) || 3)));
+      question.blanks = normalizedBlanksCount;
+      question.blankAnswers = Array.from({ length: normalizedBlanksCount }, (_, index) => `Answer ${index + 1}`);
+      question.details.push(`Blanks configured: ${normalizedBlanksCount}`);
     }
 
     if (normalizedType === 'matching') {
@@ -331,7 +333,14 @@ export const JobRoleProvider = ({ children }) => {
           break;
         }
 
-        generated.push(buildGeneratedQuestion({ questionTypeValue: row.questionType, ordinal }));
+        generated.push(
+          buildGeneratedQuestion({
+            questionTypeValue: row.questionType,
+            ordinal,
+            optionsCount: row.optionsCount,
+            blanksCount: row.blanksCount,
+          })
+        );
         ordinal += 1;
       }
 
