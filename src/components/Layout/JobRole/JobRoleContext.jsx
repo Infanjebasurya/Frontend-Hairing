@@ -38,6 +38,7 @@ export const JobRoleProvider = ({ children }) => {
 
   const storedState = loadStoredState();
   const [jobDetails, setJobDetails] = useState(storedState?.jobDetails || defaultJobDetails);
+  const [selectedCandidate, setSelectedCandidate] = useState(storedState?.selectedCandidate || null);
   const [questionSource, setQuestionSource] = useState(storedState?.questionSource || 'bank');
   const [newSetMode, setNewSetMode] = useState(storedState?.newSetMode || 'automatic');
   const [questionType, setQuestionType] = useState(storedState?.questionType || 'theory');
@@ -62,6 +63,7 @@ export const JobRoleProvider = ({ children }) => {
       storageKey,
       JSON.stringify({
         jobDetails,
+        selectedCandidate,
         questionSource,
         newSetMode,
         questionType,
@@ -81,6 +83,7 @@ export const JobRoleProvider = ({ children }) => {
     finalizedOutput,
     generatedQuestionList,
     jobDetails,
+    selectedCandidate,
     manualDraftQuestions,
     newSetMode,
     numberOfQuestions,
@@ -269,6 +272,11 @@ export const JobRoleProvider = ({ children }) => {
     setSelectedGeneratedIds((prev) => [...questions.map((question) => question.id), ...prev]);
   };
 
+  const restoreSampleGeneratedQuestions = () => {
+    replaceGeneratedQuestions(generatedQuestions);
+    setFinalizedOutput(null);
+  };
+
   const buildGeneratedQuestion = ({ questionTypeValue, ordinal, optionsCount, blanksCount }) => {
     const questionTypeLabel =
       questionTypeDefinitions.find((item) => item.value === questionTypeValue)?.label || 'Theory';
@@ -322,6 +330,10 @@ export const JobRoleProvider = ({ children }) => {
       : jobDetails.totalQuestions;
     const totalLimit = Math.max(0, Math.floor(totalLimitRaw || 0));
 
+    if (!totalLimit) {
+      return [];
+    }
+
     const rows = (planRows || []).filter((row) => row && Number(row.count) > 0 && row.questionType);
 
     const generated = [];
@@ -349,7 +361,9 @@ export const JobRoleProvider = ({ children }) => {
       }
     }
 
-    replaceGeneratedQuestions(generated);
+    if (generated.length) {
+      replaceGeneratedQuestions(generated);
+    }
     return generated;
   };
 
@@ -377,6 +391,10 @@ export const JobRoleProvider = ({ children }) => {
         evaluationNotes: (draft?.evaluationNotes || '').trim(),
       }))
       .filter((draft) => draft.prompt);
+
+    if (!normalizedDrafts.length) {
+      return [];
+    }
 
     const limitedDrafts = totalLimit ? normalizedDrafts.slice(0, totalLimit) : normalizedDrafts;
     const generated = limitedDrafts.map((draft, index) => {
@@ -461,7 +479,9 @@ export const JobRoleProvider = ({ children }) => {
       return manualQuestion;
     });
 
-    replaceGeneratedQuestions(generated);
+    if (generated.length) {
+      replaceGeneratedQuestions(generated);
+    }
     return generated;
   };
 
@@ -515,6 +535,17 @@ export const JobRoleProvider = ({ children }) => {
         years: jobDetails.experienceYears,
         months: jobDetails.experienceMonths,
       },
+      candidate: selectedCandidate
+        ? {
+            id: selectedCandidate.id ?? null,
+            candidateId: selectedCandidate.candidateId ?? null,
+            name: selectedCandidate.name ?? null,
+            email: selectedCandidate.email ?? null,
+            position: selectedCandidate.position ?? null,
+            resumeLink: selectedCandidate.resumeLink ?? null,
+            skills: selectedCandidate.skills ?? [],
+          }
+        : null,
       skills: jobDetails.skills,
       outputFormat: jobDetails.outputFormat,
       questionSource,
@@ -543,6 +574,8 @@ export const JobRoleProvider = ({ children }) => {
   const value = {
     jobDetails,
     setJobDetails,
+    selectedCandidate,
+    setSelectedCandidate,
     questionSource,
     setQuestionSource,
     newSetMode,
@@ -586,6 +619,7 @@ export const JobRoleProvider = ({ children }) => {
     assignSelectedBankQuestionsToJob,
     replaceGeneratedQuestions,
     appendGeneratedQuestions,
+    restoreSampleGeneratedQuestions,
     createNewSetFromAutomaticPlan,
     createNewSetFromManualDrafts,
     exportQuestionBank,

@@ -4,6 +4,7 @@ import {
   Button,
   Checkbox,
   Chip,
+  Snackbar,
   Dialog,
   DialogActions,
   DialogContent,
@@ -11,6 +12,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  Divider,
   MenuItem,
   Paper,
   Stack,
@@ -48,6 +50,10 @@ const ReviewQuestionsCleanPage = () => {
     appendGeneratedQuestions,
     finalizeOutputToJson,
     finalizedOutput,
+    restoreSampleGeneratedQuestions,
+    toggleBankQuestion,
+    addBankQuestion,
+    questionBank,
   } = useJobRole();
   const [previewQuestion, setPreviewQuestion] = useState(null);
   const [editingQuestion, setEditingQuestion] = useState(null);
@@ -55,6 +61,8 @@ const ReviewQuestionsCleanPage = () => {
   const [outputPreview, setOutputPreview] = useState('');
   const [isAddQuestionOpen, setIsAddQuestionOpen] = useState(false);
   const [addDraft, setAddDraft] = useState(null);
+  const [isBankPreviewOpen, setIsBankPreviewOpen] = useState(false);
+  const [bankSaveToast, setBankSaveToast] = useState({ open: false, message: '', severity: 'success' });
 
   const allGeneratedSelected =
     generatedQuestions.length > 0 && generatedQuestions.every((question) => selectedGeneratedIds.includes(question.id));
@@ -66,6 +74,75 @@ const ReviewQuestionsCleanPage = () => {
 
   const totalQuestionsLimit = Math.max(1, Math.floor(Number(jobDetails.totalQuestions) || 0));
   const canAddAnotherQuestion = generatedQuestions.length < totalQuestionsLimit;
+
+  const normalizePromptKey = (value) => String(value || '').trim().toLowerCase();
+
+  const resolveTopicForBank = () => {
+    const hardSkills = Array.isArray(jobDetails?.skills?.hard) ? jobDetails.skills.hard : [];
+    const softSkills = Array.isArray(jobDetails?.skills?.soft) ? jobDetails.skills.soft : [];
+    const transferableSkills = Array.isArray(jobDetails?.skills?.transferable) ? jobDetails.skills.transferable : [];
+
+    return hardSkills[0] || softSkills[0] || transferableSkills[0] || 'Generated';
+  };
+
+  const resolvePointsForBank = (difficulty) => {
+    const normalized = String(difficulty || '').toLowerCase();
+    if (normalized.includes('hard')) return 20;
+    if (normalized.includes('medium')) return 15;
+    if (normalized.includes('easy')) return 10;
+    if (normalized.includes('manual')) return 15;
+    return 10;
+  };
+
+  const handleSaveSelectedToBank = () => {
+    const existingKeys = new Set((questionBank || []).map((row) => normalizePromptKey(row.question)));
+    const topic = resolveTopicForBank();
+
+    let addedCount = 0;
+    let skippedCount = 0;
+
+    for (const item of selectedGeneratedQuestions) {
+      const prompt = String(item?.prompt || '').trim();
+      if (!prompt) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const key = normalizePromptKey(prompt);
+      if (existingKeys.has(key)) {
+        skippedCount += 1;
+        continue;
+      }
+
+      addBankQuestion({
+        question: prompt,
+        type: item?.type || selectedQuestionType?.label || 'Theory',
+        difficulty: item?.difficulty || 'Medium',
+        topic,
+        points: resolvePointsForBank(item?.difficulty),
+      });
+
+      existingKeys.add(key);
+      addedCount += 1;
+    }
+
+    if (!addedCount) {
+      setBankSaveToast({
+        open: true,
+        message: skippedCount
+          ? 'No new questions saved. Selected questions already exist in the bank (or are empty).'
+          : 'Select at least one generated question to save.',
+        severity: 'info',
+      });
+      return;
+    }
+
+    setBankSaveToast({
+      open: true,
+      message: `Saved ${addedCount} question(s) to Question Bank${skippedCount ? ` (skipped ${skippedCount}).` : '.'}`,
+      severity: 'success',
+    });
+  };
 
   const isMetaDetail = (detail) => {
     const normalized = String(detail || '').toLowerCase();
@@ -422,7 +499,11 @@ const ReviewQuestionsCleanPage = () => {
         <Button variant="outlined" onClick={openAddQuestion} disabled={!canAddAnotherQuestion}>
           Add Another Question
         </Button>
-        <Button variant="text" onClick={() => navigate('/job-role/question-bank')}>
+        <Button
+          variant="text"
+          onClick={() => setIsBankPreviewOpen(true)}
+          disabled={!selectedBankQuestions.length}
+        >
           View Selected Bank Questions
         </Button>
       </Stack>
@@ -516,8 +597,59 @@ const ReviewQuestionsCleanPage = () => {
               No generated questions yet
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Create a new set from settings or add a generated question here to continue the review flow.
+              Add a manual question now, or generate a set from settings to continue the review flow.
             </Typography>
+
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="center" sx={{ pt: 1 }}>
+              <Button variant="outlined" onClick={() => navigate('/job-role/settings')}>
+                Go to Settings
+              </Button>
+              <Button variant="contained" onClick={openAddQuestion} disabled={!canAddAnotherQuestion}>
+                Add Manual Question
+              </Button>
+              <Button variant="text" onClick={restoreSampleGeneratedQuestions}>
+                Restore Sample Questions
+              </Button>
+            </Stack>
+
+            {selectedBankQuestions.length > 0 && (
+              <Stack spacing={1.5} sx={{ pt: 2, px: { xs: 2, sm: 4 }, textAlign: 'left' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Selected Bank Questions ({selectedBankQuestions.length})
+                </Typography>
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ width: 54 }} />
+                        <TableCell>Question</TableCell>
+                        <TableCell sx={{ width: 140 }}>Type</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {selectedBankQuestions.map((row) => (
+                        <TableRow key={row.id} hover>
+                          <TableCell padding="checkbox">
+                            <Checkbox checked onChange={() => toggleBankQuestion(row.id)} />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {row.question}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {row.id} • {row.topic} • {row.difficulty}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip size="small" label={row.type} variant="outlined" />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Stack>
+            )}
           </Stack>
         )}
       </Stack>
@@ -542,6 +674,13 @@ const ReviewQuestionsCleanPage = () => {
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="flex-end">
           <Button variant="outlined" onClick={() => navigate('/job-role/question-bank')}>
             Back to Bank
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={handleSaveSelectedToBank}
+            disabled={!selectedGeneratedQuestions.length}
+          >
+            Save Selected to Bank
           </Button>
           <Button variant="contained" onClick={handleFinalize}>
             Finalize JSON Output
@@ -1141,6 +1280,80 @@ const ReviewQuestionsCleanPage = () => {
             }}
           >
             Add
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={bankSaveToast.open}
+        autoHideDuration={3500}
+        onClose={() => setBankSaveToast((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={bankSaveToast.severity}
+          onClose={() => setBankSaveToast((prev) => ({ ...prev, open: false }))}
+          sx={{ width: '100%' }}
+        >
+          {bankSaveToast.message}
+        </Alert>
+      </Snackbar>
+
+      <Dialog open={isBankPreviewOpen} onClose={() => setIsBankPreviewOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>Selected Bank Questions</DialogTitle>
+        <DialogContent dividers>
+          {!selectedBankQuestions.length ? (
+            <Typography variant="body2" color="text.secondary">
+              No bank questions selected yet.
+            </Typography>
+          ) : (
+            <Stack spacing={2}>
+              <Typography variant="body2" color="text.secondary">
+                Uncheck a row to remove it from the selection.
+              </Typography>
+              <Divider />
+              <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ width: 54 }} />
+                      <TableCell>Question</TableCell>
+                      <TableCell sx={{ width: 140 }}>Type</TableCell>
+                      <TableCell sx={{ width: 120 }}>Difficulty</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {selectedBankQuestions.map((row) => (
+                      <TableRow key={row.id} hover>
+                        <TableCell padding="checkbox">
+                          <Checkbox checked onChange={() => toggleBankQuestion(row.id)} />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {row.question}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {row.id} • {row.topic}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip size="small" label={row.type} variant="outlined" />
+                        </TableCell>
+                        <TableCell>{row.difficulty}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="text" onClick={() => navigate('/job-role/question-bank')}>
+            Edit in Bank
+          </Button>
+          <Button variant="contained" onClick={() => setIsBankPreviewOpen(false)}>
+            Done
           </Button>
         </DialogActions>
       </Dialog>
