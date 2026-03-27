@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
@@ -50,6 +50,8 @@ const QuestionSettingsPage = () => {
   const {
     jobDetails,
     setJobDetails,
+    selectedCandidate,
+    setSelectedCandidate,
     questionSource,
     setQuestionSource,
     newSetMode,
@@ -70,6 +72,9 @@ const QuestionSettingsPage = () => {
   } = useJobRole();
   const [activeSkillSection, setActiveSkillSection] = useState('hard');
   const [isNewSetConfigOpen, setIsNewSetConfigOpen] = useState(false);
+  const [isResumePickerOpen, setIsResumePickerOpen] = useState(false);
+  const [resumeCandidateId, setResumeCandidateId] = useState('');
+  const [resumeCandidates, setResumeCandidates] = useState([]);
   const selectedRequirement = questionTypeRequirementMap[questionType];
   const currentCoverage = questionTypeCoverage[questionType] || [];
   const selectedSkillCount = useMemo(
@@ -85,6 +90,19 @@ const QuestionSettingsPage = () => {
   const automaticOverLimit = totalQuestions > 0 && automaticTotal > totalQuestions;
   const manualRemaining = Math.max(0, totalQuestions - manualDraftQuestions.length);
 
+  useEffect(() => {
+    if (!isResumePickerOpen) return;
+
+    try {
+      const raw = window.localStorage.getItem('candidateInterviews');
+      const parsed = raw ? JSON.parse(raw) : [];
+      const normalized = Array.isArray(parsed) ? parsed : [];
+      setResumeCandidates(normalized);
+    } catch {
+      setResumeCandidates([]);
+    }
+  }, [isResumePickerOpen]);
+
   const updateTotalQuestions = (nextValue) => {
     const normalized = Math.max(1, Math.floor(Number(nextValue) || 0));
     setJobDetails((prev) => ({ ...prev, totalQuestions: normalized }));
@@ -93,6 +111,13 @@ const QuestionSettingsPage = () => {
   const handleAddAutomaticRow = () => {
     if (totalQuestions > 0 && automaticRemaining <= 0) {
       return;
+    }
+
+    if (questionSource !== 'new_set') {
+      setQuestionSource('new_set');
+    }
+    if (newSetMode !== 'automatic') {
+      setNewSetMode('automatic');
     }
 
     setAutomaticPlanRows((prev) => [
@@ -120,6 +145,13 @@ const QuestionSettingsPage = () => {
       return;
     }
 
+    if (questionSource !== 'new_set') {
+      setQuestionSource('new_set');
+    }
+    if (newSetMode !== 'manual') {
+      setNewSetMode('manual');
+    }
+
     setManualDraftQuestions((prev) => [
       ...prev,
       {
@@ -139,6 +171,30 @@ const QuestionSettingsPage = () => {
         evaluationNotes: '',
       },
     ]);
+  };
+
+  const openResumePicker = () => {
+    if (questionSource !== 'new_set') {
+      setQuestionSource('new_set');
+    }
+    if (newSetMode !== 'manual') {
+      setNewSetMode('manual');
+    }
+
+    setResumeCandidateId(selectedCandidate?.id ? String(selectedCandidate.id) : '');
+    setIsResumePickerOpen(true);
+  };
+
+  const handleConfirmResumeCandidate = () => {
+    const selected = resumeCandidates.find((row) => String(row?.id) === String(resumeCandidateId));
+    if (!selected) return;
+
+    setSelectedCandidate(selected);
+    setIsResumePickerOpen(false);
+  };
+
+  const handleClearCandidate = () => {
+    setSelectedCandidate(null);
   };
 
   const handleUpdateManualQuestion = (questionId, updates) => {
@@ -900,15 +956,37 @@ const QuestionSettingsPage = () => {
                           <Typography variant="body2" color="text.secondary">
                             Added: {manualDraftQuestions.length} / {totalQuestions} | Remaining: {manualRemaining}
                           </Typography>
+                          {selectedCandidate && (
+                            <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
+                              <Chip
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                                label={`Candidate: ${selectedCandidate.name || selectedCandidate.candidateId || selectedCandidate.id}`}
+                              />
+                              {selectedCandidate.position && <Chip size="small" variant="outlined" label={selectedCandidate.position} />}
+                              {selectedCandidate.resumeLink && (
+                                <Chip size="small" variant="outlined" label="Resume linked" />
+                              )}
+                              <Button size="small" variant="text" onClick={handleClearCandidate}>
+                                Clear
+                              </Button>
+                            </Stack>
+                          )}
                         </Box>
-                        <Button
-                          variant="outlined"
-                          startIcon={<AddIcon />}
-                          onClick={handleAddManualQuestion}
-                          disabled={totalQuestions > 0 && manualDraftQuestions.length >= totalQuestions}
-                        >
-                          Add Question
-                        </Button>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="flex-end">
+                          <Button variant="outlined" onClick={openResumePicker}>
+                            By Resume
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            startIcon={<AddIcon />}
+                            onClick={handleAddManualQuestion}
+                            disabled={totalQuestions > 0 && manualDraftQuestions.length >= totalQuestions}
+                          >
+                            Add Question
+                          </Button>
+                        </Stack>
                       </Stack>
 
                       <Stack spacing={2}>
@@ -963,6 +1041,52 @@ const QuestionSettingsPage = () => {
                 </DialogContent>
                 <DialogActions>
                   <Button onClick={() => setIsNewSetConfigOpen(false)}>Close</Button>
+                </DialogActions>
+              </Dialog>
+
+              <Dialog open={isResumePickerOpen} onClose={() => setIsResumePickerOpen(false)} fullWidth maxWidth="sm">
+                <DialogTitle>Select Candidate (By Resume)</DialogTitle>
+                <DialogContent dividers>
+                  <Stack spacing={2} sx={{ mt: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Select a candidate to reference their resume/skills while drafting manual questions.
+                    </Typography>
+
+                    <FormControl fullWidth>
+                      <InputLabel id="resume-candidate-label">Candidate</InputLabel>
+                      <Select
+                        labelId="resume-candidate-label"
+                        label="Candidate"
+                        value={resumeCandidateId}
+                        onChange={(event) => setResumeCandidateId(event.target.value)}
+                      >
+                        {resumeCandidates.map((candidate) => (
+                          <MenuItem key={candidate.id} value={String(candidate.id)}>
+                            {candidate.name || candidate.candidateId || candidate.id}
+                            {candidate.position ? ` — ${candidate.position}` : ''}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    {!resumeCandidates.length && (
+                      <Typography variant="body2" color="text.secondary">
+                        No candidates found. Add candidates first in Candidate Interviews.
+                      </Typography>
+                    )}
+                  </Stack>
+                </DialogContent>
+                <DialogActions>
+                  <Button variant="text" onClick={() => setIsResumePickerOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={handleConfirmResumeCandidate}
+                    disabled={!resumeCandidates.length || !resumeCandidateId}
+                  >
+                    Use Candidate
+                  </Button>
                 </DialogActions>
               </Dialog>
 
