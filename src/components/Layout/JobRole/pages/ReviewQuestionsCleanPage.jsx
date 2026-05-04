@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -48,6 +48,7 @@ const ReviewQuestionsCleanPage = () => {
     updateGeneratedQuestion,
     deleteGeneratedQuestion,
     appendGeneratedQuestions,
+    getOutputJsonPreview,
     finalizeOutputToJson,
     finalizedOutput,
     restoreSampleGeneratedQuestions,
@@ -63,6 +64,21 @@ const ReviewQuestionsCleanPage = () => {
   const [addDraft, setAddDraft] = useState(null);
   const [isBankPreviewOpen, setIsBankPreviewOpen] = useState(false);
   const [bankSaveToast, setBankSaveToast] = useState({ open: false, message: '', severity: 'success' });
+
+  useEffect(() => {
+    if (!outputPreview) return;
+    setOutputPreview(getOutputJsonPreview());
+  }, [
+    generatedQuestions,
+    getOutputJsonPreview,
+    jobDetails,
+    outputPreview,
+    questionSource,
+    selectedBankQuestions,
+    selectedGeneratedIds,
+    selectedGeneratedQuestions,
+    selectedQuestionType,
+  ]);
 
   const allGeneratedSelected =
     generatedQuestions.length > 0 && generatedQuestions.every((question) => selectedGeneratedIds.includes(question.id));

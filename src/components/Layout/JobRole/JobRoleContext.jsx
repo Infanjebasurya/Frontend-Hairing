@@ -56,6 +56,7 @@ export const JobRoleProvider = ({ children }) => {
   const [questionBank, setQuestionBank] = useState(storedState?.questionBank || questionBankRows);
   const [generatedQuestionList, setGeneratedQuestionList] = useState(storedState?.generatedQuestionList || generatedQuestions);
   const [finalizedOutput, setFinalizedOutput] = useState(storedState?.finalizedOutput || null);
+  const [lastGeneratedAt, setLastGeneratedAt] = useState(storedState?.lastGeneratedAt || null);
   const [questionTypeCoverage, setQuestionTypeCoverage] = useState(storedState?.questionTypeCoverage || defaultCoverageState);
 
   useEffect(() => {
@@ -75,6 +76,7 @@ export const JobRoleProvider = ({ children }) => {
         selectedQuestionIds,
         selectedGeneratedIds,
         finalizedOutput,
+        lastGeneratedAt,
         questionTypeCoverage,
       })
     );
@@ -91,6 +93,7 @@ export const JobRoleProvider = ({ children }) => {
     questionSource,
     questionType,
     questionTypeCoverage,
+    lastGeneratedAt,
     selectedGeneratedIds,
     selectedQuestionIds,
   ]);
@@ -527,37 +530,42 @@ export const JobRoleProvider = ({ children }) => {
       2
     );
 
-  const finalizeOutputToJson = () => {
-    const payload = {
-      jobId: jobDetails.jobId,
-      jobRole: jobDetails.jobRole,
-      experience: {
-        years: jobDetails.experienceYears,
-        months: jobDetails.experienceMonths,
-      },
-      candidate: selectedCandidate
-        ? {
-            id: selectedCandidate.id ?? null,
-            candidateId: selectedCandidate.candidateId ?? null,
-            name: selectedCandidate.name ?? null,
-            email: selectedCandidate.email ?? null,
-            position: selectedCandidate.position ?? null,
-            resumeLink: selectedCandidate.resumeLink ?? null,
-            skills: selectedCandidate.skills ?? [],
-          }
-        : null,
-      skills: jobDetails.skills,
-      outputFormat: jobDetails.outputFormat,
-      questionSource,
-      newSetMode: questionSource === 'new_set' ? newSetMode : undefined,
-      questionType: selectedQuestionType?.label || questionType,
-      numberOfQuestions,
-      enabledCoverage: questionTypeCoverage[questionType] || [],
-      selectedBankQuestions,
-      selectedGeneratedQuestions,
-      generatedAt: new Date().toISOString(),
-    };
+  const buildOutputPayload = (generatedAtOverride) => ({
+    jobId: jobDetails.jobId,
+    jobRole: jobDetails.jobRole,
+    experience: {
+      years: jobDetails.experienceYears,
+      months: jobDetails.experienceMonths,
+    },
+    candidate: selectedCandidate
+      ? {
+          id: selectedCandidate.id ?? null,
+          candidateId: selectedCandidate.candidateId ?? null,
+          name: selectedCandidate.name ?? null,
+          email: selectedCandidate.email ?? null,
+          position: selectedCandidate.position ?? null,
+          resumeLink: selectedCandidate.resumeLink ?? null,
+          skills: selectedCandidate.skills ?? [],
+        }
+      : null,
+    skills: jobDetails.skills,
+    outputFormat: jobDetails.outputFormat,
+    questionSource,
+    newSetMode: questionSource === 'new_set' ? newSetMode : undefined,
+    questionType: selectedQuestionType?.label || questionType,
+    numberOfQuestions,
+    enabledCoverage: questionTypeCoverage[questionType] || [],
+    selectedBankQuestions,
+    selectedGeneratedQuestions,
+    generatedAt: generatedAtOverride ?? lastGeneratedAt,
+  });
 
+  const getOutputJsonPreview = () => JSON.stringify(buildOutputPayload(finalizedOutput?.generatedAt ?? lastGeneratedAt), null, 2);
+
+  const finalizeOutputToJson = () => {
+    const nextGeneratedAt = new Date().toISOString();
+    setLastGeneratedAt(nextGeneratedAt);
+    const payload = buildOutputPayload(nextGeneratedAt);
     setFinalizedOutput(payload);
     assignSelectedBankQuestionsToJob();
 
@@ -623,6 +631,7 @@ export const JobRoleProvider = ({ children }) => {
     createNewSetFromAutomaticPlan,
     createNewSetFromManualDrafts,
     exportQuestionBank,
+    getOutputJsonPreview,
     finalizeOutputToJson,
     toggleJobSkill,
     toggleCoverageItem,
