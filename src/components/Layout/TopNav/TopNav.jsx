@@ -42,7 +42,8 @@ const TopNav = ({ darkMode, user, isSidebarCollapsed, onToggleSidebar, onOpenFee
     if (path === '/') return 'Dashboard';
     if (path === '/user') return 'User Management';
     if (path === '/hiring-form') return 'Hiring Form';
-    if (path.startsWith('/job-role')) return 'Questions Generation';
+    if (path === '/question-bank') return 'Question Bank';
+    if (path.startsWith('/job-role')) return 'Question Generation';
     if (path === '/chat' || path === '/chat/new') return 'Chat';
     if (path === '/search') return 'Search';
     if (path === '/plans') return 'Upgrade Plan';
@@ -67,8 +68,14 @@ const TopNav = ({ darkMode, user, isSidebarCollapsed, onToggleSidebar, onOpenFee
     setNotificationAnchorEl(null);
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout(false);
+    navigate('/login');
+    handleProfileMenuClose();
+  };
+
+  const handleLogoutAll = async () => {
+    await logout(true);
     navigate('/login');
     handleProfileMenuClose();
   };
@@ -220,14 +227,14 @@ const TopNav = ({ darkMode, user, isSidebarCollapsed, onToggleSidebar, onOpenFee
                   fontWeight: 600
                 }}
               >
-                {user?.email?.charAt(0).toUpperCase() || 'U'}
+                {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'O'}
               </Avatar>
               <Box sx={{ minWidth: 0, pr: 1 }}>
                 <Typography variant="body2" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
-                  {user?.name || user?.email?.split('@')[0] || 'User'}
+                  {user?.name || user?.companyName || user?.email?.split('@')[0] || 'Organization'}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.1 }}>
-                  {user?.role || 'Member'}
+                  {user?.currentRole || (user?.isOrgAdmin ? 'Organization Admin' : 'Member')}
                 </Typography>
               </Box>
             </Box>
@@ -277,7 +284,13 @@ const TopNav = ({ darkMode, user, isSidebarCollapsed, onToggleSidebar, onOpenFee
                 <ListItemIcon>
                   <LogoutIcon fontSize="small" />
                 </ListItemIcon>
-                <ListItemText>Logout</ListItemText>
+                <ListItemText>Logout (Current Device)</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={handleLogoutAll}>
+                <ListItemIcon>
+                  <LogoutIcon fontSize="small" color="error" />
+                </ListItemIcon>
+                <ListItemText sx={{ color: 'error.main' }}>Logout All Devices</ListItemText>
               </MenuItem>
             </Menu>
 

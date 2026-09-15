@@ -26,9 +26,7 @@ import {
   People as PeopleIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-
-// Use Vite's environment variable (fallback to localhost)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+import { createJobInterview, updateJobInterview, searchJobInterviewIds } from '../../../../services/jobInterviewService';
 
 const CreateNewProcess = () => {
   const theme = useTheme();
@@ -43,18 +41,20 @@ const CreateNewProcess = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [interviewersList, setInterviewersList] = useState([]);
+  const [jobIdOptions, setJobIdOptions] = useState([]);
   
   // Form state
   const [formData, setFormData] = useState({
-    id: editData?.id || Date.now(),
-    jobId: editData?.jobId || 'SW567',
+    id: editData?.id || editData?._id || Date.now(),
+    jobId: editData?.jobId || `JOB${String(Date.now()).slice(-4)}`,
+    jobTitle: editData?.jobTitle || '',
     jdLink: editData?.jdLink || '',
     interviewRounds: editData?.interviewRounds || [
       {
         id: Date.now(),
-        name: '',
+        name: 'round 1',
         interviewer: '',
-        isSelfAssigned: false,
+        isSelfAssigned: true,
       }
     ],
   });
@@ -69,7 +69,7 @@ const CreateNewProcess = () => {
   const fetchInterviewers = async () => {
     try {
       setLoading(true);
-      // Mock data - replace with actual API call
+      // Mock / Default list - can also be loaded from user service
       setInterviewersList([
         'John Doe (john@company.com)',
         'Jane Smith (jane@company.com)',
@@ -142,7 +142,7 @@ const CreateNewProcess = () => {
       interviewRounds: prev.interviewRounds.map(round => 
         round.id === id ? { 
           ...round, 
-          interviewer: value,
+          interviewer: value, 
           isSelfAssigned: value === 'Rajesh R (rajesh@company.com)' 
         } : round
       )
@@ -157,7 +157,7 @@ const CreateNewProcess = () => {
       interviewRounds: prev.interviewRounds.map(round => 
         round.id === id ? { 
           ...round, 
-          interviewer: selfInterviewer,
+          interviewer: selfInterviewer, 
           isSelfAssigned: true 
         } : round
       )
@@ -168,6 +168,12 @@ const CreateNewProcess = () => {
     // Validate Job ID
     if (!formData.jobId.trim()) {
       setError('Job ID is required');
+      return false;
+    }
+
+    // Validate Job Title
+    if (!formData.jobTitle.trim()) {
+      setError('Job Title is required');
       return false;
     }
 
@@ -189,40 +195,58 @@ const CreateNewProcess = () => {
       setSaving(true);
       setError('');
 
-      // Prepare API payload
-      const payload = {
-        ...formData,
-        rounds: formData.interviewRounds.length,
-        status: 'In progress',
-        candidates: 0,
-        team: ['JD', 'MJ', 'AR'],
-        createdAt: editData?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+      // Build payload adhering exactly to POST /api/job-interviews specification
+      const apiPayload = {
+        jobId: formData.jobId.trim(),
+        jobTitle: formData.jobTitle.trim(),
+        jdLink: formData.jdLink.trim(),
+        candidates: typeof editData?.candidates === 'number' ? editData.candidates : 0,
+        team: Array.isArray(editData?.team) ? editData.team : [],
+        interviewRounds: formData.interviewRounds.map(r => ({
+          name: r.name.trim(),
+          interviewer: r.interviewer || 'somebody',
+          isSelfAssigned: Boolean(r.isSelfAssigned),
+        })),
+        organizationId: import.meta.env?.VITE_ORGANIZATION_ID || '6a0b4d7398ed27126dfd78ff',
       };
 
-      console.log('Saving payload:', payload);
+      console.log('Sending Job Interview payload to API:', apiPayload);
 
-      // Save to localStorage
-      const existingProcesses = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
-      
-      if (editData) {
-        // Update existing process
-        const updatedProcesses = existingProcesses.map(process => 
-          process.id === formData.id ? payload : process
-        );
-        localStorage.setItem('jobInterviews', JSON.stringify(updatedProcesses));
+      let apiResponse;
+      if (editData && (editData._id || editData.id)) {
+        apiResponse = await updateJobInterview(editData._id || editData.id, apiPayload);
       } else {
-        // Add new process
-        localStorage.setItem('jobInterviews', JSON.stringify([...existingProcesses, payload]));
+        apiResponse = await createJobInterview(apiPayload);
       }
 
-      console.log('Process saved successfully:', payload);
+      if (!apiResponse.success) {
+        const errorMsg = apiResponse.status === 409
+          ? `A job interview with Job ID "${apiPayload.jobId}" already exists. Please choose a different Job ID.`
+          : (apiResponse.error || 'Failed to save interview process. Please try again.');
+        throw new Error(errorMsg);
+      }
+
+      const savedEntity = apiResponse?.data?.data || apiResponse?.data || {
+        ...apiPayload,
+        id: formData.id,
+        rounds: apiPayload.interviewRounds.length,
+        status: 'In progress',
+        createdAt: new Date().toISOString(),
+      };
+
+      // Also sync to local cache for instant client availability
+      const existingProcesses = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
+      if (editData) {
+        const updated = existingProcesses.map(p => (p.id === formData.id || p._id === formData.id ? { ...p, ...savedEntity } : p));
+        localStorage.setItem('jobInterviews', JSON.stringify(updated));
+      } else {
+        localStorage.setItem('jobInterviews', JSON.stringify([savedEntity, ...existingProcesses]));
+      }
+
       setSuccess(true);
-      
-      // Redirect after 2 seconds
       setTimeout(() => {
         navigate('/job-interviews');
-      }, 2000);
+      }, 1200);
 
     } catch (err) {
       console.error('Error saving process:', err);
@@ -231,6 +255,7 @@ const CreateNewProcess = () => {
       setSaving(false);
     }
   };
+
 
   return (
     <Box sx={{ 
@@ -355,36 +380,91 @@ const CreateNewProcess = () => {
           ? '0 20px 54px rgba(0,0,0,0.24)'
           : '0 20px 54px rgba(15,23,42,0.08)',
       }}>
-        {/* Job ID Section */}
-        <Box sx={{ mb: { xs: 3, sm: 4 } }}>
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              fontWeight: 600, 
-              mb: 1.5,
-              fontSize: { xs: '1rem', sm: '1.125rem' },
-              color: 'text.primary'
-            }}
-          >
-            Job ID
-          </Typography>
-          <TextField
-            fullWidth
-            value={formData.jobId}
-            onChange={(e) => setFormData(prev => ({ ...prev, jobId: e.target.value }))}
-            disabled={saving}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '8px',
-                bgcolor: 'background.paper',
-                '& input': {
-                  fontSize: { xs: '0.9rem', sm: '1rem' },
-                  fontWeight: 500,
-                  padding: { xs: '12px 14px', sm: '14px 16px' }
+        {/* Job ID & Job Title Section */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr' }, gap: 2, mb: { xs: 3, sm: 4 } }}>
+          <Box>
+            <Typography 
+              variant="h6" 
+              sx={{ 
+                fontWeight: 600, 
+                mb: 1.5,
+                fontSize: { xs: '1rem', sm: '1.125rem' },
+                color: 'text.primary'
+              }}
+            >
+              Job ID
+            </Typography>
+            <Autocomplete
+              freeSolo
+              options={jobIdOptions}
+              value={formData.jobId}
+              onInputChange={async (event, newInputValue) => {
+                setFormData(prev => ({ ...prev, jobId: newInputValue }));
+                if (newInputValue && newInputValue.length >= 2) {
+                  try {
+                    const res = await searchJobInterviewIds(newInputValue);
+                    if (res.success && res.data) {
+                      const list = Array.isArray(res.data) ? res.data : (res.data.jobIds || res.data.data || []);
+                      setJobIdOptions(list.map(item => (typeof item === 'string' ? item : item.jobId || item._id)));
+                    }
+                  } catch (e) {
+                    // ignore
+                  }
                 }
-              }
-            }}
-          />
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  fullWidth
+                  placeholder="e.g. JOB001"
+                  disabled={saving}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '8px',
+                      bgcolor: 'background.paper',
+                      '& input': {
+                        fontSize: { xs: '0.9rem', sm: '1rem' },
+                        fontWeight: 500,
+                        padding: { xs: '12px 14px', sm: '14px 16px' }
+                      }
+                    }
+                  }}
+                />
+              )}
+            />
+          </Box>
+
+          <Box>
+            <Typography 
+              variant="h6" 
+              sx={{ 
+                fontWeight: 600, 
+                mb: 1.5,
+                fontSize: { xs: '1rem', sm: '1.125rem' },
+                color: 'text.primary'
+              }}
+            >
+              Job Title
+            </Typography>
+            <TextField
+              fullWidth
+              placeholder="e.g. QA junior job role"
+              value={formData.jobTitle}
+              onChange={(e) => setFormData(prev => ({ ...prev, jobTitle: e.target.value }))}
+              disabled={saving}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                  bgcolor: 'background.paper',
+                  '& input': {
+                    fontSize: { xs: '0.9rem', sm: '1rem' },
+                    fontWeight: 500,
+                    padding: { xs: '12px 14px', sm: '14px 16px' }
+                  }
+                }
+              }}
+            />
+          </Box>
         </Box>
 
         {/* JD Link Section */}

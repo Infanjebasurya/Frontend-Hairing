@@ -32,6 +32,6 @@ export const planData = {
     label: 'Free Plan',
     used: 2,
     total: 3,
-    messages: '2 / 3 messages used'
+    messages: ''
   }
 };

@@ -1,4 +1,3 @@
-// src/Admin/components/Dashboard/Home.jsx
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -13,55 +12,90 @@ import {
   People,
   Group,
   Person,
-  TrendingUp
+  TrendingUp,
+  WorkOutline,
+  AssignmentTurnedIn,
+  MenuBook,
+  Assignment
 } from '@mui/icons-material';
 import { getUserStats, initializeUsers } from '../../../services/userService';
+import { useAuth } from '../../../contexts/AuthContext';
 import AppLoader from '../../Common/AppLoader';
 
 const Home = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { user, isHR, isInterviewer, isOrgAdmin } = useAuth();
   const [stats, setStats] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Initialize users with sample data if empty
     initializeUsers();
-    
-    // Load stats
     loadStats();
-  }, []);
+  }, [user]);
 
   const loadStats = () => {
     setLoading(true);
     try {
-      const statsData = getUserStats();
-      
-      const statsArray = [
-        { 
-          title: 'Total HR Users', 
-          value: statsData.totalHR.toString(), 
-          icon: <People />, 
-          color: '#3498DB',
-          description: 'Human Resource managers'
-        },
-        { 
-          title: 'Total Interviewers', 
-          value: statsData.totalInterviewers.toString(), 
-          icon: <Group />, 
-          color: '#2ECC71',
-          description: 'Active interviewers'
-        },
-        { 
-          title: 'Total Users', 
-          value: statsData.totalUsers.toString(), 
-          icon: <Person />, 
-          color: '#9B59B6',
-          description: 'All system users'
-        }
-      ];
-      
-      setStats(statsArray);
+      if (isHR || isInterviewer || user?.role === 'HR' || user?.role === 'INTERVIEWER') {
+        const hrStats = [
+          { 
+            title: 'Active Job Roles', 
+            value: '4', 
+            icon: <WorkOutline />, 
+            color: '#6366F1',
+            description: 'Open hiring positions'
+          },
+          { 
+            title: 'Candidate Pipeline', 
+            value: '18', 
+            icon: <AssignmentTurnedIn />, 
+            color: '#10B981',
+            description: 'Candidates in review & interview'
+          },
+          { 
+            title: 'Hiring Forms', 
+            value: '6', 
+            icon: <Assignment />, 
+            color: '#F59E0B',
+            description: 'Active application forms'
+          },
+          { 
+            title: 'Question Bank', 
+            value: '45+', 
+            icon: <MenuBook />, 
+            color: '#8B5CF6',
+            description: 'Technical & behavioral items'
+          }
+        ];
+        setStats(hrStats);
+      } else {
+        const statsData = getUserStats();
+        const adminStats = [
+          { 
+            title: 'Total HR Users', 
+            value: statsData.totalHR.toString(), 
+            icon: <People />, 
+            color: '#3498DB',
+            description: 'Human Resource managers'
+          },
+          { 
+            title: 'Total Interviewers', 
+            value: statsData.totalInterviewers.toString(), 
+            icon: <Group />, 
+            color: '#2ECC71',
+            description: 'Active interviewers'
+          },
+          { 
+            title: 'Total Users', 
+            value: statsData.totalUsers.toString(), 
+            icon: <Person />, 
+            color: '#9B59B6',
+            description: 'All system users'
+          }
+        ];
+        setStats(adminStats);
+      }
     } catch (error) {
       console.error('Error loading stats:', error);
     } finally {
@@ -79,6 +113,8 @@ const Home = () => {
     );
   }
 
+  const isHrMode = isHR || isInterviewer || user?.role === 'HR' || user?.role === 'INTERVIEWER';
+
   return (
     <Box sx={{ p: isMobile ? 2 : 3 }}>
       {/* Header */}
@@ -92,7 +128,7 @@ const Home = () => {
             mb: 1
           }}
         >
-          Dashboard Overview
+          {isHrMode ? 'Recruitment & Interview Dashboard' : 'Dashboard Overview'}
         </Typography>
         <Typography 
           variant="body1" 
@@ -101,7 +137,9 @@ const Home = () => {
             opacity: 0.8
           }}
         >
-          Welcome to your admin dashboard
+          {isHrMode 
+            ? `Welcome back, ${user?.name || 'HR Manager'} — manage job roles, hiring workflows, and candidate interviews.`
+            : 'Welcome to your admin dashboard'}
         </Typography>
       </Box>
 

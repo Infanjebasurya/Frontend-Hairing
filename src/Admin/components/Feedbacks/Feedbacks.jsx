@@ -38,8 +38,17 @@ import {
   Schedule as ScheduleIcon,
   Archive as ArchiveIcon,
   Category as CategoryIcon,
-  Clear as ClearIcon
+  Clear as ClearIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
+
+import { 
+  getFeedbacks, 
+  updateFeedback, 
+  deleteFeedback 
+} from '../../../services/feedbackService';
+import { getOrganizations } from '../../../services/organizationService';
+import HelpUsImprove from '../../../components/Layout/HelpUsImprove/HelpUsImprove';
 
 const Feedbacks = ({ darkMode = false }) => {
   const [feedbacks, setFeedbacks] = useState([]);
@@ -51,11 +60,13 @@ const Feedbacks = ({ darkMode = false }) => {
   const [, setDeleteLoading] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedFeedback, setSelectedFeedback] = useState(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  // Mock data with categories
+  // Fallback data with categories
   const mockFeedbacks = [
     {
-      id: 1,
+      id: 'mock-1',
+      orgId: '6a0b4d7398ed27126dfd78ff',
       organization: 'Tech Corp',
       email: 'user1@techcorp.com',
       feedback: 'The user interface is very intuitive and easy to use. The dashboard layout is clean and all the features are easily accessible. Great job on the design!',
@@ -65,7 +76,8 @@ const Feedbacks = ({ darkMode = false }) => {
       status: 'new'
     },
     {
-      id: 2,
+      id: 'mock-2',
+      orgId: '6a0b4d7398ed27126dfd78ff',
       organization: 'Finance LLC',
       email: 'user2@finance.com',
       feedback: 'Could you add more export options for reports? We need CSV, Excel, and PDF formats for our quarterly reviews.',
@@ -75,7 +87,8 @@ const Feedbacks = ({ darkMode = false }) => {
       status: 'new'
     },
     {
-      id: 3,
+      id: 'mock-3',
+      orgId: '6a98864954481f4c048733c1',
       organization: 'Education Inc',
       email: 'user3@education.com',
       feedback: 'Experiencing slow loading times on the dashboard page. It takes about 5-7 seconds to load all the widgets.',
@@ -85,63 +98,126 @@ const Feedbacks = ({ darkMode = false }) => {
       status: 'reviewed'
     },
     {
-      id: 4,
+      id: 'mock-4',
+      orgId: '6a98864954481f4c048733c1',
       organization: 'Healthcare Systems',
       email: 'user4@healthcare.com',
-      feedback: 'The mobile version needs improvement for better accessibility. Some buttons are too small and hard to tap accurately.',
+      feedback: 'Very good application, please continue enhancing the candidate workflow!',
       date: '2024-01-12T16:45:00Z',
       highlighted: false,
-      category: 'bug',
-      status: 'new'
-    },
-    {
-      id: 5,
-      organization: 'Retail Co',
-      email: 'user5@retail.com',
-      feedback: 'Love the new analytics features! The real-time data updates are incredibly helpful for our operations.',
-      date: '2024-01-11T11:30:00Z',
-      highlighted: true,
       category: 'general',
-      status: 'reviewed'
-    },
-    {
-      id: 6,
-      organization: 'Manufacturing Ltd',
-      email: 'user6@manufacturing.com',
-      feedback: 'Please add two-factor authentication for enhanced security. This is critical for our compliance requirements.',
-      date: '2024-01-10T13:20:00Z',
-      highlighted: false,
-      category: 'security',
       status: 'new'
     }
   ];
 
   const categoryConfig = {
-    general: { label: 'General', color: '#2196f3', icon: FeedbackIcon },
+    general: { label: 'General Feedback', color: '#2196f3', icon: FeedbackIcon },
     bug: { label: 'Bug Report', color: '#f44336', icon: DeleteIcon },
     feature: { label: 'Feature Request', color: '#4caf50', icon: StarIcon },
-    ui: { label: 'UI/UX', color: '#ff9800', icon: CategoryIcon },
-    performance: { label: 'Performance', color: '#9c27b0', icon: ScheduleIcon },
-    security: { label: 'Security', color: '#e91e63', icon: CheckCircleIcon },
+    ui: { label: 'UI/UX Improvement', color: '#ff9800', icon: CategoryIcon },
+    performance: { label: 'Performance Issue', color: '#9c27b0', icon: ScheduleIcon },
+    security: { label: 'Security Concern', color: '#e91e63', icon: CheckCircleIcon },
     other: { label: 'Other', color: '#607d8b', icon: MoreVertIcon }
   };
 
   useEffect(() => {
-    const fetchFeedbacks = async () => {
-      try {
-        setLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setFeedbacks(mockFeedbacks);
-      } catch (err) {
-        setError('Failed to load feedbacks');
-        console.error('Error fetching feedbacks:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchFeedbacks();
   }, []);
+
+  const fetchFeedbacks = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // Build organization map
+      let orgMap = {};
+      try {
+        const orgsRes = await getOrganizations();
+        if (orgsRes.success && orgsRes.data) {
+          const payloadData = orgsRes.data.data || orgsRes.data;
+          const rawOrgs = Array.isArray(payloadData?.organizations)
+            ? payloadData.organizations
+            : Array.isArray(orgsRes.data?.organizations)
+            ? orgsRes.data.organizations
+            : Array.isArray(payloadData?.items)
+            ? payloadData.items
+            : Array.isArray(payloadData)
+            ? payloadData
+            : Array.isArray(orgsRes.data)
+            ? orgsRes.data
+            : [];
+          rawOrgs.forEach(o => {
+            const id = o._id || o.id;
+            if (id) orgMap[id] = o.companyName || o.name;
+          });
+        }
+      } catch (err) {
+        console.warn('Orgs fetch error in feedbacks:', err);
+      }
+
+      // Check localStorage created_orgs
+      try {
+        const storedCreated = localStorage.getItem('created_orgs');
+        if (storedCreated) {
+          const parsed = JSON.parse(storedCreated);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(o => {
+              const id = o._id || o.id;
+              if (id) orgMap[id] = o.companyName || o.name;
+            });
+          }
+        }
+      } catch (e) {}
+
+      // Fetch live feedbacks
+      const res = await getFeedbacks();
+      if (res.success && res.data) {
+        const rawList = Array.isArray(res.data.data) 
+          ? res.data.data 
+          : (Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.feedbacks) ? res.data.feedbacks : []));
+
+        if (rawList.length > 0) {
+          const formatted = rawList.map((fb, idx) => {
+            const catKey = (fb.feedbackCategory || 'General Feedback').toLowerCase().replace(/[^a-z]/g, '');
+            let mappedCategory = 'general';
+            if (catKey.includes('bug')) mappedCategory = 'bug';
+            else if (catKey.includes('feature')) mappedCategory = 'feature';
+            else if (catKey.includes('ui') || catKey.includes('ux')) mappedCategory = 'ui';
+            else if (catKey.includes('performance') || catKey.includes('slow')) mappedCategory = 'performance';
+            else if (catKey.includes('security')) mappedCategory = 'security';
+            else if (catKey.includes('other')) mappedCategory = 'other';
+
+            const orgIdVal = fb.orgId?._id || (typeof fb.orgId === 'string' ? fb.orgId : '');
+            const orgNameVal = fb.orgId?.companyName || fb.orgId?.name || (orgIdVal ? orgMap[orgIdVal] : '') || fb.organization || 'Organization';
+
+            return {
+              id: fb._id || fb.id || `fb-${idx}`,
+              _id: fb._id || fb.id,
+              orgId: orgIdVal,
+              organization: orgNameVal,
+              email: fb.orgUserEmail || fb.email || '',
+              feedback: fb.feedbackText || fb.feedback || '',
+              feedbackCategory: fb.feedbackCategory || 'General Feedback',
+              date: fb.createdAt || fb.date || new Date().toISOString(),
+              highlighted: fb.isHighlighted ?? (fb.highlighted ?? false),
+              category: mappedCategory,
+              status: (fb.feedbackStatus || fb.status || 'NEW').toLowerCase()
+            };
+          });
+          setFeedbacks(formatted);
+          return;
+        }
+      }
+
+      // Fallback
+      setFeedbacks(mockFeedbacks);
+    } catch (err) {
+      console.warn('Live feedbacks fetch fallback:', err);
+      setFeedbacks(mockFeedbacks);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleMenuOpen = (event, feedback) => {
     setAnchorEl(event.currentTarget);
@@ -159,12 +235,20 @@ const Feedbacks = ({ darkMode = false }) => {
       return;
     }
 
+    const fb = feedbacks.find(f => f.id === feedbackId);
     setDeleteLoading(feedbackId);
+    setFeedbacks(prev => prev.filter(f => f.id !== feedbackId));
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setFeedbacks(feedbacks.filter(feedback => feedback.id !== feedbackId));
+      await deleteFeedback(feedbackId, {
+        orgId: fb?.orgId,
+        feedbackCategory: fb?.feedbackCategory || 'General Feedback',
+        feedbackText: fb?.feedback || '',
+        feedbackStatus: (fb?.status || 'REVIEWED').toUpperCase(),
+        isHighlighted: fb?.highlighted ?? false,
+        orgUserEmail: fb?.email || ''
+      });
     } catch (err) {
-      setError('Failed to delete feedback');
       console.error('Error deleting feedback:', err);
     } finally {
       setDeleteLoading(null);
@@ -172,29 +256,45 @@ const Feedbacks = ({ darkMode = false }) => {
   };
 
   const toggleHighlight = async (feedbackId) => {
+    const fb = feedbacks.find(f => f.id === feedbackId);
+    if (!fb) return;
+    const newHighlighted = !fb.highlighted;
+
     handleMenuClose();
+    setFeedbacks(prev => prev.map(f => f.id === feedbackId ? { ...f, highlighted: newHighlighted } : f));
+
     try {
-      setFeedbacks(feedbacks.map(feedback => 
-        feedback.id === feedbackId 
-          ? { ...feedback, highlighted: !feedback.highlighted }
-          : feedback
-      ));
+      await updateFeedback(feedbackId, {
+        orgId: fb.orgId || '6a0b4d7398ed27126dfd78ff',
+        feedbackCategory: fb.feedbackCategory || 'General Feedback',
+        feedbackText: fb.feedback,
+        feedbackStatus: (fb.status || 'NEW').toUpperCase(),
+        isHighlighted: newHighlighted,
+        orgUserEmail: fb.email
+      });
     } catch (err) {
-      setError('Failed to update highlight status');
       console.error('Error updating highlight:', err);
     }
   };
 
   const markAsReviewed = async (feedbackId) => {
+    const fb = feedbacks.find(f => f.id === feedbackId);
+    if (!fb) return;
+    const newStatus = fb.status === 'new' ? 'reviewed' : 'new';
+
     handleMenuClose();
+    setFeedbacks(prev => prev.map(f => f.id === feedbackId ? { ...f, status: newStatus } : f));
+
     try {
-      setFeedbacks(feedbacks.map(feedback => 
-        feedback.id === feedbackId 
-          ? { ...feedback, status: feedback.status === 'new' ? 'reviewed' : 'new' }
-          : feedback
-      ));
+      await updateFeedback(feedbackId, {
+        orgId: fb.orgId || '6a0b4d7398ed27126dfd78ff',
+        feedbackCategory: fb.feedbackCategory || 'General Feedback',
+        feedbackText: fb.feedback,
+        feedbackStatus: newStatus.toUpperCase(),
+        isHighlighted: fb.highlighted,
+        orgUserEmail: fb.email
+      });
     } catch (err) {
-      setError('Failed to update status');
       console.error('Error updating status:', err);
     }
   };
@@ -292,6 +392,21 @@ const Feedbacks = ({ darkMode = false }) => {
                 </Typography>
               </Box>
             </Box>
+
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setIsCreateOpen(true)}
+              sx={{
+                borderRadius: 1.5,
+                textTransform: 'none',
+                px: 2.5,
+                py: 1,
+                fontWeight: 600
+              }}
+            >
+              Create Feedback
+            </Button>
           </Box>
 
           {/* Stats Cards */}
@@ -565,7 +680,7 @@ const Feedbacks = ({ darkMode = false }) => {
             <Stack spacing={2}>
               {filteredFeedbacks.map((feedback) => {
                 const category = categoryConfig[feedback.category];
-                const CategoryIcon = category?.icon || FeedbackIcon;
+                const ItemCategoryIcon = category?.icon || FeedbackIcon;
                 
                 return (
                   <Card
@@ -646,7 +761,7 @@ const Feedbacks = ({ darkMode = false }) => {
                             </Box>
 
                             <Chip
-                              icon={<CategoryIcon sx={{ fontSize: 16 }} />}
+                              icon={<ItemCategoryIcon sx={{ fontSize: 16 }} />}
                               label={category?.label || 'General'}
                               size="small"
                               sx={{
@@ -749,6 +864,16 @@ const Feedbacks = ({ darkMode = false }) => {
             <ListItemText>Delete</ListItemText>
           </MenuItem>
         </Menu>
+
+        {/* Create Feedback Modal */}
+        <HelpUsImprove
+          open={isCreateOpen}
+          onClose={() => {
+            setIsCreateOpen(false);
+            fetchFeedbacks();
+          }}
+          darkMode={darkMode}
+        />
       </Container>
     </Box>
   );

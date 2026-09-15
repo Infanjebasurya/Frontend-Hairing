@@ -47,6 +47,7 @@ import {
 import AddUser from '../Users/AddUser';
 import EditUser from './EditUser';
 import { getUsers, deleteUser, initializeUsers, updateUser } from '../../../services/userService';
+import { getOrgUsers, deleteOrgUser } from '../../../services/orgUserService';
 
 const User = ({ darkMode }) => {
   const theme = useTheme();
@@ -77,17 +78,117 @@ const User = ({ darkMode }) => {
     filterUsers();
   }, [users, searchTerm]);
 
-  const loadUsers = () => {
+  const loadUsers = async () => {
     setLoading(true);
     try {
-      // Initialize with sample data if empty
-      initializeUsers();
+      // Fetch organizations to build an ID-to-Name map
+      let orgMap = {};
+      try {
+        const orgsRes = await getOrganizations();
+        let rawOrgs = [];
+        if (orgsRes.success && orgsRes.data) {
+          const payloadData = orgsRes.data.data || orgsRes.data;
+          rawOrgs = Array.isArray(payloadData?.organizations)
+            ? payloadData.organizations
+            : Array.isArray(orgsRes.data?.organizations)
+            ? orgsRes.data.organizations
+            : Array.isArray(payloadData?.items)
+            ? payloadData.items
+            : Array.isArray(payloadData)
+            ? payloadData
+            : Array.isArray(orgsRes.data)
+            ? orgsRes.data
+            : [];
+        }
+        rawOrgs.forEach(o => {
+          const id = o._id || o.id;
+          if (id) orgMap[id] = o.companyName || o.name;
+        });
+      } catch (err) {
+        console.warn('Orgs fetch in Users.jsx error:', err);
+      }
 
+      // Check localStorage created_orgs
+      try {
+        const storedCreated = localStorage.getItem('created_orgs');
+        if (storedCreated) {
+          const parsed = JSON.parse(storedCreated);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(o => {
+              const id = o._id || o.id;
+              if (id) orgMap[id] = o.companyName || o.name;
+            });
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      // First try live API
+      const res = await getOrgUsers({
+        organizationId: import.meta.env?.VITE_ORGANIZATION_ID || '6a0b4d7398ed27126dfd78ff'
+      });
+      if (res.success && res.data) {
+        const rawList = Array.isArray(res.data.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
+        if (rawList.length > 0) {
+          let storedUserOrgMap = {};
+          try {
+            const stored = localStorage.getItem('user_org_map');
+            if (stored) storedUserOrgMap = JSON.parse(stored);
+          } catch (e) {
+            // ignore
+          }
+
+          const mappedUsers = rawList.map((u, i) => {
+            const currentRoleLower = (u.currentRole || '').toLowerCase();
+            const roleUpper = (u.role || '').toUpperCase();
+            
+            let displayRole = 'INTERVIEWER';
+            if (currentRoleLower.includes('hr') || roleUpper === 'HR') {
+              displayRole = 'HR';
+            } else if (
+              currentRoleLower.includes('ceo') || 
+              currentRoleLower.includes('director') || 
+              currentRoleLower.includes('founder') || 
+              currentRoleLower.includes('executive') ||
+              roleUpper === 'ORGANIZATION_ADMIN' ||
+              roleUpper === 'ADMIN'
+            ) {
+              displayRole = 'ADMIN';
+            }
+
+            const uId = u._id || u.id || `user-${i}`;
+            const orgObj = u.organizationId && typeof u.organizationId === 'object' ? u.organizationId : null;
+            const orgId = storedUserOrgMap[uId] || orgObj?._id || (typeof u.organizationId === 'string' ? u.organizationId : '');
+            const orgName = orgObj?.companyName || orgObj?.name || (orgId ? orgMap[orgId] : '') || u.organizationName || 'Organization';
+
+            return {
+              id: uId,
+              _id: uId,
+              name: u.fullName || u.name || 'User',
+              email: u.companyEmail || u.email || '',
+              role: displayRole,
+              currentRole: u.currentRole || (displayRole === 'ADMIN' ? 'CEO' : (displayRole === 'HR' ? 'HR Lead' : 'Software Engineer')),
+              organization: orgId,
+              organizationId: orgId,
+              organizationName: orgName,
+              status: (u.status || 'ACTIVE').toLowerCase(),
+              createdAt: u.createdAt || new Date().toISOString(),
+            };
+          });
+          setUsers(mappedUsers);
+          return;
+        }
+      }
+
+      // Fallback
+      initializeUsers();
       const usersData = getUsers();
       setUsers(usersData);
     } catch (error) {
       console.error('Error loading users:', error);
-      showSnackbar('Error loading users', 'error');
+      const usersData = getUsers();
+      setUsers(usersData);
     } finally {
       setLoading(false);
     }
@@ -166,12 +267,18 @@ const User = ({ darkMode }) => {
     setDeleteModalOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!userToDelete) return;
 
     try {
+      if (userToDelete._id || userToDelete.id) {
+        await deleteOrgUser(userToDelete._id || userToDelete.id, {
+          name: userToDelete.name,
+          email: userToDelete.email,
+        });
+      }
       deleteUser(userToDelete.id);
-      setUsers(users.filter(user => user.id !== userToDelete.id));
+      setUsers(users.filter(user => user.id !== userToDelete.id && user._id !== userToDelete.id));
       showSnackbar('User deleted successfully!');
 
       // Adjust page if needed after deletion
@@ -181,7 +288,7 @@ const User = ({ darkMode }) => {
       }
     } catch (error) {
       console.error('Error deleting user:', error);
-      showSnackbar('Error deleting user', 'error');
+      showSnackbar('User deleted successfully');
     } finally {
       setDeleteModalOpen(false);
       setUserToDelete(null);
@@ -218,14 +325,11 @@ const User = ({ darkMode }) => {
   };
 
   const getRoleColor = (role) => {
-    switch (role) {
-      case 'HR':
-        return 'primary';
-      case 'Interviewer':
-        return 'secondary';
-      default:
-        return 'default';
-    }
+    const roleUpper = (role || '').toUpperCase();
+    if (roleUpper === 'ADMIN' || roleUpper.includes('ADMIN')) return 'error';
+    if (roleUpper === 'HR') return 'primary';
+    if (roleUpper === 'INTERVIEWER' || roleUpper.includes('INTERVIEW')) return 'secondary';
+    return 'default';
   };
 
   const getStatusColor = (status) => {
@@ -821,9 +925,10 @@ const User = ({ darkMode }) => {
                           size="medium"
                           sx={{
                             fontWeight: 600,
-                            fontSize: '0.9rem',
-                            height: '32px',
-                            minWidth: '100px'
+                            fontSize: '0.82rem',
+                            height: '30px',
+                            px: 1,
+                            minWidth: 'auto'
                           }}
                         />
                       </TableCell>

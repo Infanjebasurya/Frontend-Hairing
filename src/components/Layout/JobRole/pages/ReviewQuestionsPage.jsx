@@ -63,7 +63,7 @@ const ReviewQuestionsPage = () => {
   return (
     <QuestionsGenerationLayout
       title="Review Generated Questions"
-      subtitle="Finalize question selection, confirm question type coverage, and prepare the set for JSON output and job assignment."
+      subtitle="Finalize question selection, confirm question type coverage, and prepare the set for job assignment."
     >
       <Alert severity="success" sx={{ borderRadius: 3 }}>
         {generatedQuestions.length} generated questions available. {selectedGeneratedIds.length} are marked for final use. {selectedBankQuestions.length} bank questions are selected for {jobDetails.jobId}.
@@ -73,33 +73,31 @@ const ReviewQuestionsPage = () => {
         {generatedQuestions.map((question) => (
           <Grid item xs={12} md={6} key={question.id}>
             <Stack
-              spacing={2}
+              spacing={1.5}
               sx={{
-                height: '100%',
-                p: 3,
-                borderRadius: 3,
+                p: 2.5,
+                borderRadius: 2.5,
                 border: '1px solid',
-                borderColor: 'divider',
+                borderColor: selectedGeneratedIds.includes(question.id) ? 'primary.main' : 'divider',
                 bgcolor: 'background.paper',
               }}
             >
-              <Stack direction="row" justifyContent="space-between" spacing={2}>
+              <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                 <Box>
-                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1 }}>
-                    <Chip label={question.type} size="small" color="primary" variant="outlined" />
-                    <Chip label={question.difficulty} size="small" />
-                  </Stack>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {question.id} • {question.type}
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 600, mt: 0.5 }}>
                     {question.prompt}
                   </Typography>
                 </Box>
-                <Checkbox checked={selectedGeneratedIds.includes(question.id)} onChange={() => toggleGeneratedQuestion(question.id)} />
+                <Checkbox
+                  checked={selectedGeneratedIds.includes(question.id)}
+                  onChange={() => toggleGeneratedQuestion(question.id)}
+                />
               </Stack>
-
-              {renderPreview(question)}
-
               <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                {question.details.map((detail) => (
+                {(question.details || []).map((detail) => (
                   <Chip key={detail} label={detail} size="small" variant="outlined" />
                 ))}
               </Stack>
@@ -123,7 +121,7 @@ const ReviewQuestionsPage = () => {
               Final Summary
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Source: {questionSource === 'bank' ? 'Question Bank' : 'Create New Set'} | Primary Type: {selectedQuestionType?.label} | Output Format: {jobDetails.outputFormat}
+              Source: {questionSource === 'bank' ? 'Question Bank' : 'Create New Set'} | Primary Type: {selectedQuestionType?.label}
             </Typography>
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
               {selectedBankQuestions.map((question) => (
@@ -135,7 +133,7 @@ const ReviewQuestionsPage = () => {
                 Back to Bank
               </Button>
               <Button variant="contained">
-                Finalize JSON Output
+                Finalize Output
               </Button>
             </Stack>
         </Stack>

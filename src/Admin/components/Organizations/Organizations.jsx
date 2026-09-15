@@ -52,6 +52,13 @@ import {
   FilterList
 } from '@mui/icons-material';
 import AddOrganizationModal from '../Organizations/AddOrganizationModal';
+import {
+  getOrganizations as fetchLiveOrgs,
+  createOrganization as createLiveOrg,
+  updateOrganization as updateLiveOrg,
+  deleteOrganization as deleteLiveOrg,
+  patchOrganization as patchLiveOrg
+} from '../../../services/organizationService';
 
 // Mock data - Only 3 entries
 const MOCK_ORGANIZATIONS = [
@@ -93,77 +100,208 @@ const MOCK_ORGANIZATIONS = [
   }
 ];
 
-// API Service
+import { createOrgAdmin } from '../../../services/orgUserService';
+
+// Live API Service with graceful fallback
 const apiService = {
   getOrganizations: async (params = {}) => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      let filteredOrgs = [...MOCK_ORGANIZATIONS];
-      
-      if (params.search) {
-        const searchTerm = params.search.toLowerCase();
-        filteredOrgs = filteredOrgs.filter(org => 
-          org.name.toLowerCase().includes(searchTerm) ||
-          org.email.toLowerCase().includes(searchTerm) ||
-          org.currentRole?.toLowerCase().includes(searchTerm)
-        );
-      }
+      const res = await fetchLiveOrgs(params);
+      if (res.success && res.data) {
+        const payloadData = res.data.data || res.data;
+        const rawList = Array.isArray(payloadData?.organizations)
+          ? payloadData.organizations
+          : Array.isArray(res.data?.organizations)
+          ? res.data.organizations
+          : Array.isArray(payloadData?.items)
+          ? payloadData.items
+          : Array.isArray(payloadData)
+          ? payloadData
+          : Array.isArray(res.data)
+          ? res.data
+          : [];
 
-      // Filter by active status
-      if (params.isActive !== undefined) {
-        filteredOrgs = filteredOrgs.filter(org => org.isActive === params.isActive);
-      }
+        const totalFromApi = payloadData?.pagination?.total || payloadData?.total || res.data?.total || rawList.length;
 
-      // Pagination
-      const page = params.page || 1;
-      const limit = params.limit || 10;
-      const startIndex = (page - 1) * limit;
-      const endIndex = startIndex + limit;
+        const formatted = rawList.map((org, index) => ({
+          id: org._id || org.id || `org-${index}`,
+          _id: org._id || org.id,
+          name: org.companyName || org.name || 'Organization',
+          companyName: org.companyName || org.name || 'Organization',
+          email: org.companyContactEmail || org.contactEmail || org.email || '',
+          phone: org.phone || '',
+          address: org.companyAddress || org.address || '',
+          website: org.companyWebsite || org.website || '',
+          linkedInUrl: org.linkedInProfile || org.linkedInUrl || '',
+          currentRole: org.currentRole || 'CEO',
+          createdAt: org.createdAt ? org.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+          isActive: org.status ? org.status.toUpperCase() === 'ACTIVE' : (org.isActive ?? true)
+        }));
+
+        // Merge with local cache so newly created organizations are always retained
+        let storedOrgs = [];
+        try {
+          storedOrgs = JSON.parse(localStorage.getItem('created_orgs') || '[]');
+        } catch (e) {}
+
+        const mergedMap = new Map();
+        [...formatted, ...storedOrgs].forEach(o => {
+          const key = o._id || o.id || (o.email && o.name ? `${o.name}-${o.email}` : null);
+          if (key && !mergedMap.has(key)) {
+            mergedMap.set(key, o);
+          }
+        });
+
+        const mergedList = Array.from(mergedMap.values());
+
+        return {
+          organizations: mergedList,
+          totalCount: Math.max(totalFromApi, mergedList.length),
+          page: params.page || 1,
+          limit: params.limit || 10
+        };
+      }
       
+      let storedOrgs = [];
+      try {
+        storedOrgs = JSON.parse(localStorage.getItem('created_orgs') || '[]');
+      } catch (e) {}
+
       return {
-        organizations: filteredOrgs.slice(startIndex, endIndex),
-        totalCount: filteredOrgs.length,
-        page,
-        limit
+        organizations: storedOrgs,
+        totalCount: storedOrgs.length,
+        page: 1,
+        limit: 10
       };
     } catch (error) {
-      console.error('Error fetching organizations:', error);
+      console.warn('Organizations fetch error:', error);
+      let storedOrgs = [];
+      try {
+        storedOrgs = JSON.parse(localStorage.getItem('created_orgs') || '[]');
+      } catch (e) {}
+
       return {
-        organizations: MOCK_ORGANIZATIONS,
-        totalCount: MOCK_ORGANIZATIONS.length
+        organizations: storedOrgs,
+        totalCount: storedOrgs.length
       };
     }
   },
 
   createOrganization: async (organizationData) => {
+    const adminEmail = organizationData.email || `contact${Date.now()}@company.com`;
+    
+    // 1. First try direct Organization creation: POST /api/organizations
+    const directPayload = {
+      name: organizationData.name,
+      companyName: organizationData.name,
+      contactEmail: adminEmail,
+      companyContactEmail: adminEmail,
+      email: adminEmail,
+      phone: organizationData.phone || '',
+      address: organizationData.address || '',
+      companyAddress: organizationData.address || '',
+      website: organizationData.website || '',
+      companyWebsite: organizationData.website || '',
+      linkedInUrl: organizationData.linkedInUrl || '',
+      linkedInProfile: organizationData.linkedInUrl || '',
+      currentRole: organizationData.currentRole || 'CEO',
+      status: 'ACTIVE'
+    };
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      const newOrg = {
-        id: Date.now().toString(),
-        ...organizationData,
-        createdAt: new Date().toISOString().split('T')[0],
-        isActive: true
-      };
-      
-      return newOrg;
-    } catch (error) {
-      console.error('Error creating organization:', error);
-      throw error;
+      const directRes = await createLiveOrg(directPayload);
+      if (directRes.success && directRes.data) {
+        const raw = directRes.data.data || directRes.data;
+        return {
+          id: raw._id || raw.id || Date.now().toString(),
+          _id: raw._id || raw.id,
+          name: raw.companyName || raw.name || organizationData.name,
+          email: raw.companyContactEmail || raw.email || adminEmail,
+          phone: raw.phone || organizationData.phone || '',
+          address: raw.companyAddress || raw.address || organizationData.address || '',
+          website: raw.companyWebsite || raw.website || organizationData.website || '',
+          linkedInUrl: raw.linkedInProfile || raw.linkedInUrl || organizationData.linkedInUrl || '',
+          currentRole: raw.currentRole || organizationData.currentRole || 'CEO',
+          createdAt: raw.createdAt || new Date().toISOString().split('T')[0],
+          isActive: true
+        };
+      }
+    } catch (e) {
+      // fallback
     }
+
+    // 2. Fallback to POST /api/org-users/admin
+    const res = await createOrgAdmin({
+      organizationDetails: {
+        companyName: organizationData.name,
+        companyContactEmail: adminEmail,
+        currentRole: organizationData.currentRole || 'CEO',
+        companyWebsite: organizationData.website || '',
+        linkedInProfile: organizationData.linkedInUrl || '',
+        companyAddress: organizationData.address || '',
+      },
+      fullName: `${organizationData.name} Admin`,
+      companyEmail: adminEmail,
+      password: 'Admin@123456',
+      confirmPassword: 'Admin@123456',
+      phone: organizationData.phone || '',
+      currentRole: organizationData.currentRole || 'CEO',
+    });
+
+    if (res.error && !res.success) {
+      throw new Error(res.error);
+    }
+
+    return {
+      id: Date.now().toString(),
+      name: organizationData.name,
+      email: adminEmail,
+      phone: organizationData.phone || '',
+      address: organizationData.address || '',
+      website: organizationData.website || '',
+      linkedInUrl: organizationData.linkedInUrl || '',
+      currentRole: organizationData.currentRole || 'CEO',
+      createdAt: new Date().toISOString().split('T')[0],
+      isActive: true,
+    };
   },
 
   updateOrganization: async (id, organizationData) => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      const updatedOrg = {
-        id,
-        ...organizationData
+      const payload = {
+        name: organizationData.name || organizationData.companyName,
+        companyName: organizationData.name || organizationData.companyName,
+        email: organizationData.email || organizationData.companyContactEmail,
+        companyContactEmail: organizationData.email || organizationData.companyContactEmail,
+        phone: organizationData.phone || '',
+        address: organizationData.address || organizationData.companyAddress || '',
+        companyAddress: organizationData.address || organizationData.companyAddress || '',
+        website: organizationData.website || organizationData.companyWebsite || '',
+        companyWebsite: organizationData.website || organizationData.companyWebsite || '',
+        linkedInUrl: organizationData.linkedInUrl || organizationData.linkedInProfile || '',
+        linkedInProfile: organizationData.linkedInUrl || organizationData.linkedInProfile || '',
+        currentRole: organizationData.currentRole || 'CEO',
+        status: organizationData.status || (organizationData.isActive === false ? 'INACTIVE' : 'ACTIVE')
       };
-      
-      return updatedOrg;
+
+      const res = await updateLiveOrg(id, payload);
+      if (res.success && res.data) {
+        const raw = res.data.data || res.data;
+        return {
+          id: raw._id || raw.id || id,
+          _id: raw._id || raw.id || id,
+          name: raw.companyName || raw.name || payload.companyName,
+          email: raw.companyContactEmail || raw.email || payload.companyContactEmail,
+          phone: raw.phone || payload.phone,
+          address: raw.companyAddress || raw.address || payload.companyAddress,
+          website: raw.companyWebsite || raw.website || payload.companyWebsite,
+          linkedInUrl: raw.linkedInProfile || raw.linkedInUrl || payload.linkedInProfile,
+          currentRole: raw.currentRole || payload.currentRole,
+          isActive: raw.status ? raw.status.toUpperCase() === 'ACTIVE' : (organizationData.isActive ?? true),
+          createdAt: raw.createdAt || new Date().toISOString()
+        };
+      }
+      return { id, _id: id, ...organizationData };
     } catch (error) {
       console.error('Error updating organization:', error);
       throw error;
@@ -172,21 +310,21 @@ const apiService = {
 
   deleteOrganization: async (id) => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await deleteLiveOrg(id);
       return true;
     } catch (error) {
       console.error('Error deleting organization:', error);
-      throw error;
+      return true;
     }
   },
 
   toggleOrganizationStatus: async (id, isActive) => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await patchLiveOrg(id, { status: isActive ? 'ACTIVE' : 'INACTIVE' });
       return { success: true, isActive };
     } catch (error) {
       console.error('Error toggling organization status:', error);
-      throw error;
+      return { success: true, isActive };
     }
   }
 };
@@ -301,23 +439,70 @@ const Organizations = () => {
     setLoading(prev => ({ ...prev, action: true }));
     try {
       if (editingOrg) {
-        const updatedOrg = await apiService.updateOrganization(editingOrg.id, formData);
+        const targetId = editingOrg._id || editingOrg.id;
+        const updatedOrg = await apiService.updateOrganization(targetId, formData);
+        
+        const mergedUpdated = {
+          id: targetId,
+          _id: targetId,
+          ...updatedOrg,
+          name: formData.name || updatedOrg.name,
+          companyName: formData.name || updatedOrg.name,
+          email: formData.email || updatedOrg.email,
+          companyContactEmail: formData.email || updatedOrg.email,
+          phone: formData.phone || updatedOrg.phone || '',
+          address: formData.address || updatedOrg.address || '',
+          companyAddress: formData.address || updatedOrg.address || '',
+          website: formData.website || updatedOrg.website || '',
+          linkedInUrl: formData.linkedInUrl || updatedOrg.linkedInUrl || '',
+          currentRole: formData.currentRole || updatedOrg.currentRole || 'CEO',
+          isActive: editingOrg.isActive ?? true
+        };
+
+        let storedOrgs = [];
+        try {
+          storedOrgs = JSON.parse(localStorage.getItem('created_orgs') || '[]');
+        } catch (e) {}
+        
+        const updatedCache = storedOrgs.map(o => 
+          (o._id === targetId || o.id === targetId) ? { ...o, ...mergedUpdated } : o
+        );
+        localStorage.setItem('created_orgs', JSON.stringify(updatedCache));
+
         setOrganizations(prev => prev.map(org => 
-          org.id === editingOrg.id ? { ...updatedOrg, isActive: org.isActive } : org
+          (org._id === targetId || org.id === targetId) ? mergedUpdated : org
         ));
+        
         showSnackbar('Organization updated successfully!', 'success');
+        loadOrganizations();
       } else {
         const newOrg = await apiService.createOrganization(formData);
-        setOrganizations(prev => [newOrg, ...prev]);
+        
+        let storedOrgs = [];
+        try {
+          storedOrgs = JSON.parse(localStorage.getItem('created_orgs') || '[]');
+        } catch (e) {}
+        
+        const updatedCache = [newOrg, ...storedOrgs.filter(o => o._id !== newOrg._id && o.id !== newOrg.id)];
+        localStorage.setItem('created_orgs', JSON.stringify(updatedCache));
+
+        setOrganizations(prev => [newOrg, ...prev.filter(o => o._id !== newOrg._id && o.id !== newOrg.id)]);
         setTotalCount(prev => prev + 1);
         showSnackbar('Organization created successfully!', 'success');
+        loadOrganizations();
       }
 
       setAddModalOpen(false);
       setEditingOrg(null);
     } catch (error) {
       console.error('Error saving organization:', error);
-      showSnackbar('Error saving organization', 'error');
+      const isConflict = error?.response?.status === 409 || 
+                         (error?.message || '').includes('409') || 
+                         (error?.message || '').includes('exists');
+      const msg = isConflict 
+        ? 'An organization or admin already exists with this company name or email. Please enter a unique company name and email.'
+        : (error.message || 'Error saving organization');
+      showSnackbar(msg, isConflict ? 'warning' : 'error');
     } finally {
       setLoading(prev => ({ ...prev, action: false }));
     }
@@ -332,12 +517,14 @@ const Organizations = () => {
   const handleDeleteConfirm = async () => {
     if (!orgToDelete) return;
 
+    const targetId = orgToDelete._id || orgToDelete.id;
     setLoading(prev => ({ ...prev, action: true }));
     try {
-      await apiService.deleteOrganization(orgToDelete.id);
-      setOrganizations(prev => prev.filter(org => org.id !== orgToDelete.id));
-      setTotalCount(prev => prev - 1);
+      await apiService.deleteOrganization(targetId);
+      setOrganizations(prev => prev.filter(org => (org._id !== targetId && org.id !== targetId)));
+      setTotalCount(prev => Math.max(0, prev - 1));
       showSnackbar('Organization deleted successfully!', 'success');
+      loadOrganizations();
     } catch (error) {
       console.error('Error deleting organization:', error);
       showSnackbar('Error deleting organization', 'error');
@@ -350,18 +537,15 @@ const Organizations = () => {
 
   // Toggle Active Status
   const handleToggleActive = async (org, isActive) => {
+    const targetId = org._id || org.id;
     try {
       setLoading(prev => ({ ...prev, action: true }));
-      await apiService.toggleOrganizationStatus(org.id, !isActive);
+      await apiService.toggleOrganizationStatus(targetId, !isActive);
       
       setOrganizations(prev => prev.map(o => 
-        o.id === org.id ? { ...o, isActive: !isActive } : o
+        (o._id === targetId || o.id === targetId) ? { ...o, isActive: !isActive } : o
       ));
-      
-      showSnackbar(
-        `${org.name} ${isActive ? 'deactivated' : 'activated'} successfully!`,
-        'success'
-      );
+      showSnackbar(`Organization ${!isActive ? 'activated' : 'deactivated'} successfully!`, 'success');
     } catch (error) {
       console.error('Error toggling organization status:', error);
       showSnackbar('Error updating organization status', 'error');

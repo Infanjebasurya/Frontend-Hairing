@@ -17,6 +17,8 @@ import Home from './components/Layout/Home/Home';
 import User from './components/Layout/User/User';
 import HiringForm from './components/HiringForm/HiringForm';
 import JobRole from './components/Layout/JobRole/JobRole';
+import QuestionBankPage from './components/Layout/JobRole/pages/QuestionBankPage';
+import { JobRoleProvider } from './components/Layout/JobRole/JobRoleContext';
 import JobInterviews from './components/Layout/JobInterview/JobInterview';
 import CreateNewProcess from './components/Layout/JobInterview/CreateNewProcess/CreateNewProcess';
 import EditJobInterview from './components/Layout/JobInterview/EditJobInterview';
@@ -590,8 +592,8 @@ function AdminAppContent() {
     setAdminDarkMode(!adminDarkMode);
   };
 
-  const handleAdminLogout = () => {
-    logout();
+  const handleAdminLogout = async (allDevices = false) => {
+    await logout(allDevices);
     navigate('/login');
   };
 
@@ -629,12 +631,6 @@ function MainAppContent() {
     }
   }, [isMobile]);
 
-  // Redirect admin users to admin panel
-  useEffect(() => {
-    if (user && isAdmin && !window.location.pathname.startsWith('/admin')) {
-      navigate('/admin');
-    }
-  }, [user, isAdmin, navigate]);
 
   const handleToggleTheme = () => {
     setDarkMode(!darkMode);
@@ -687,25 +683,33 @@ function MainAppContent() {
         {/* Public Routes */}
         <Route
           path="/login"
-          element={user ? (isAdmin ? <Navigate to="/admin" /> : <Navigate to="/" />) : <Login darkMode={darkMode} onToggleTheme={handleToggleTheme} />}
+          element={user ? <Navigate to={isAdmin ? "/admin" : "/"} replace /> : <Login darkMode={darkMode} onToggleTheme={handleToggleTheme} />}
         />
         <Route
           path="/register"
-          element={user ? (isAdmin ? <Navigate to="/admin" /> : <Navigate to="/" />) : <Register darkMode={darkMode} onToggleTheme={handleToggleTheme} />}
+          element={user ? <Navigate to={isAdmin ? "/admin" : "/"} replace /> : <Register darkMode={darkMode} onToggleTheme={handleToggleTheme} />}
         />
         <Route
           path="/forgot-password"
-          element={user ? (isAdmin ? <Navigate to="/admin" /> : <Navigate to="/" />) : <ForgotPassword darkMode={darkMode} onToggleTheme={handleToggleTheme} />}
+          element={user ? <Navigate to={isAdmin ? "/admin" : "/"} replace /> : <ForgotPassword darkMode={darkMode} onToggleTheme={handleToggleTheme} />}
+        />
+        <Route
+          path="/reset-password"
+          element={user ? <Navigate to={isAdmin ? "/admin" : "/"} replace /> : <ForgotPassword darkMode={darkMode} onToggleTheme={handleToggleTheme} />}
         />
 
-        {/* Protected Routes - Regular User Only */}
+        {/* Protected Routes - Role Based */}
         <Route
           path="/"
           element={
             <ProtectedRoute requireUser={true}>
-              <MainLayout {...layoutProps}>
-                <Home darkMode={darkMode} />
-              </MainLayout>
+              {isAdmin ? (
+                <Navigate to="/admin" replace />
+              ) : (
+                <MainLayout {...layoutProps}>
+                  <Home darkMode={darkMode} />
+                </MainLayout>
+              )}
             </ProtectedRoute>
           }
         />
@@ -739,6 +743,19 @@ function MainAppContent() {
             <ProtectedRoute requireUser={true}>
               <MainLayout {...layoutProps}>
                 <JobInterviews darkMode={darkMode} />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/question-bank"
+          element={
+            <ProtectedRoute requireUser={true}>
+              <MainLayout {...layoutProps}>
+                <JobRoleProvider>
+                  <QuestionBankPage isSelectionMode={false} />
+                </JobRoleProvider>
               </MainLayout>
             </ProtectedRoute>
           }

@@ -53,10 +53,15 @@ const Sidebar = ({
   //   3: false  // Projects - default closed
   // });
 
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
+
+  const handleAdminConsoleClick = () => {
+    navigate('/admin');
+    if (isMobile) onMobileClose();
+  };
 
   // const handleToggleSection = (sectionId) => {
   //   setOpenSections(prev => ({
@@ -113,7 +118,7 @@ const Sidebar = ({
   };
 
   const handleJobRoleClick = () => {
-    navigate('/job-role');
+    navigate('/question-bank');
     if (isMobile) onMobileClose();
   };
 
@@ -182,157 +187,6 @@ const Sidebar = ({
         gap: 2,
         px: 0.5,
       }}>
-
-        {/* New Chat Button with Search Icon */}
-        <Box sx={{ 
-          px: isMobile ? 2 : (isSidebarCollapsed ? 1 : 2), 
-          mb: 0,
-          margin: 0 
-        }}>
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 1, 
-            margin: 0 
-          }}>
-            {/* New Chat Button */}
-            {isMobile ? (
-              <Box 
-                onClick={handleNewChat}
-                sx={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-start',
-                  bgcolor: 'primary.main',
-                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                  color: 'primary.contrastText',
-                  borderRadius: 2,
-                  py: 1.2,
-                  px: 2,
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  fontWeight: '600',
-                  margin: 0,
-                  outline: 'none',
-                  '&:focus': {
-                    outline: 'none',
-                  },
-                  '&:focus-visible': {
-                    outline: 'none',
-                  },
-                  '&:hover': {
-                    bgcolor: 'primary.dark',
-                    transform: 'translateY(-1px)',
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-                  },
-                  transition: 'all 0.2s ease-in-out',
-                }}
-              >
-                <AddIcon sx={{ mr: 1.5, fontSize: '1.2rem' }} />
-                New Chat
-              </Box>
-            ) : isSidebarCollapsed ? (
-              <Tooltip title="New Chat" placement="right">
-                <IconButton
-                  onClick={handleNewChat}
-                  sx={{
-                    width: '100%',
-                    height: 44,
-                    bgcolor: 'primary.main',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                    color: 'primary.contrastText',
-                    borderRadius: 2,
-                    margin: 0,
-                    outline: 'none',
-                    '&:focus': {
-                      outline: 'none',
-                      boxShadow: 'none',
-                    },
-                    '&:focus-visible': {
-                      outline: 'none',
-                    },
-                    '&:hover': {
-                      bgcolor: 'primary.dark',
-                      transform: 'translateY(-1px)',
-                    },
-                    transition: 'all 0.2s ease-in-out',
-                  }}
-                >
-                  <AddIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            ) : (
-              <Box
-                onClick={handleNewChat}
-                sx={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-start',
-                  bgcolor: 'primary.main',
-                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                  color: 'primary.contrastText',
-                  borderRadius: 2,
-                  py: 1.2,
-                  px: 2,
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  fontWeight: '600',
-                  margin: 0,
-                  outline: 'none',
-                  '&:focus': {
-                    outline: 'none',
-                  },
-                  '&:focus-visible': {
-                    outline: 'none',
-                  },
-                  '&:hover': {
-                    bgcolor: 'primary.dark',
-                    transform: 'translateY(-1px)',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-                  },
-                  transition: 'all 0.2s ease-in-out',
-                }}
-              >
-                <AddIcon sx={{ mr: 1.5, fontSize: '1.2rem' }} />
-                New Chat
-              </Box>
-            )}
-
-            {/* Search Icon */}
-            {!isMobile && !isSidebarCollapsed && (
-              <Tooltip title="Search">
-                <IconButton
-                  onClick={handleSearchClick}
-                  sx={{
-                    color: 'text.primary',
-                    borderRadius: 2,
-                    width: 44,
-                    height: 44,
-                    margin: 0,
-                    outline: 'none',
-                    '&:focus': {
-                      outline: 'none',
-                      boxShadow: 'none',
-                    },
-                    '&:focus-visible': {
-                      outline: 'none',
-                    },
-                    '&:hover': {
-                      color: 'primary.main',
-                      bgcolor: 'action.hover',
-                      transform: 'translateY(-1px)',
-                    },
-                    transition: 'all 0.2s ease-in-out',
-                  }}
-                >
-                  <SearchIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Box>
-        </Box>
 
         {/* Home, User, Hiring Form, and Job Interviews Menu Items */}
         <Box sx={{ 
@@ -723,22 +577,22 @@ const Sidebar = ({
             </MenuItem>
           )}
 
-          {/* Questions Generation Menu Item */}
+          {/* Question Bank Menu Item */}
           {isMobile ? (
             <MenuItem
               onClick={handleJobRoleClick}
               sx={{
-                color: isActiveRoute('/job-role') ? 'primary.main' : 'text.secondary',
+                color: isActiveRoute('/question-bank') ? 'primary.main' : 'text.secondary',
                 fontSize: '0.875rem',
                 fontWeight: '500',
                 borderRadius: 1,
                 minHeight: 40,
                 margin: 0,
-                bgcolor: isActiveRoute('/job-role') ? 'action.selected' : 'transparent',
+                bgcolor: isActiveRoute('/question-bank') ? 'action.selected' : 'transparent',
                 outline: 'none',
                 '&:focus': {
                   outline: 'none',
-                  bgcolor: isActiveRoute('/job-role') ? 'action.selected' : 'transparent',
+                  bgcolor: isActiveRoute('/question-bank') ? 'action.selected' : 'transparent',
                 },
                 '&:focus-visible': {
                   outline: 'none',
@@ -752,21 +606,21 @@ const Sidebar = ({
               <ListItemIcon>
                 <AssignmentIndIcon
                   fontSize="small"
-                  sx={{ color: isActiveRoute('/job-role') ? 'primary.main' : 'text.secondary' }}
+                  sx={{ color: isActiveRoute('/question-bank') ? 'primary.main' : 'text.secondary' }}
                 />
               </ListItemIcon>
-              <ListItemText>Questions Generation</ListItemText>
+              <ListItemText>Question Bank</ListItemText>
             </MenuItem>
           ) : isSidebarCollapsed ? (
-            <Tooltip title="Questions Generation" placement="right">
+            <Tooltip title="Question Bank" placement="right">
               <IconButton
                 onClick={handleJobRoleClick}
                 sx={{
-                  color: isActiveRoute('/job-role') ? 'primary.main' : 'text.secondary',
+                  color: isActiveRoute('/question-bank') ? 'primary.main' : 'text.secondary',
                   width: '100%',
                   height: 40,
                   margin: 0,
-                  bgcolor: isActiveRoute('/job-role') ? 'action.selected' : 'transparent',
+                  bgcolor: isActiveRoute('/question-bank') ? 'action.selected' : 'transparent',
                   outline: 'none',
                   '&:focus': {
                     outline: 'none',
@@ -788,17 +642,17 @@ const Sidebar = ({
             <MenuItem
               onClick={handleJobRoleClick}
               sx={{
-                color: isActiveRoute('/job-role') ? 'primary.main' : 'text.secondary',
+                color: isActiveRoute('/question-bank') ? 'primary.main' : 'text.secondary',
                 fontSize: '0.875rem',
                 fontWeight: '500',
                 borderRadius: 1,
                 minHeight: 40,
                 margin: 0,
-                bgcolor: isActiveRoute('/job-role') ? 'action.selected' : 'transparent',
+                bgcolor: isActiveRoute('/question-bank') ? 'action.selected' : 'transparent',
                 outline: 'none',
                 '&:focus': {
                   outline: 'none',
-                  bgcolor: isActiveRoute('/job-role') ? 'action.selected' : 'transparent',
+                  bgcolor: isActiveRoute('/question-bank') ? 'action.selected' : 'transparent',
                 },
                 '&:focus-visible': {
                   outline: 'none',
@@ -812,10 +666,10 @@ const Sidebar = ({
               <ListItemIcon>
                 <AssignmentIndIcon
                   fontSize="small"
-                  sx={{ color: isActiveRoute('/job-role') ? 'primary.main' : 'text.secondary' }}
+                  sx={{ color: isActiveRoute('/question-bank') ? 'primary.main' : 'text.secondary' }}
                 />
               </ListItemIcon>
-              <ListItemText>Questions Generation</ListItemText>
+              <ListItemText>Question Bank</ListItemText>
             </MenuItem>
           )}
         </Box>

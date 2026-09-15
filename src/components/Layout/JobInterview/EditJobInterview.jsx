@@ -29,6 +29,7 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 import AppLoader from '../../Common/AppLoader';
+import { getJobInterview, updateJobInterview } from '../../../services/jobInterviewService';
 
 const EditJobInterview = () => {
   const theme = useTheme();
@@ -48,6 +49,7 @@ const EditJobInterview = () => {
   const [formData, setFormData] = useState({
     id: '',
     jobId: '',
+    jobTitle: '',
     jdLink: '',
     interviewRounds: [],
   });
@@ -80,28 +82,45 @@ const EditJobInterview = () => {
       if (location.state?.editData) {
         const editData = location.state.editData;
         setFormData({
-          id: editData.id,
+          id: editData.id || editData._id,
           jobId: editData.jobId || '',
+          jobTitle: editData.jobTitle || 'QA junior job role',
           jdLink: editData.jdLink || '',
           interviewRounds: editData.interviewRounds || [],
         });
         setOriginalData(editData);
-      } else if (id) {
-        // Try to parse id
-        const jobId = parseInt(id);
-        
-        if (isNaN(jobId)) {
-          throw new Error('Invalid job ID');
+        return;
+      }
+
+      if (id) {
+        // Try fetching directly from backend API
+        try {
+          const apiRes = await getJobInterview(id);
+          if (apiRes.success && apiRes.data) {
+            const item = apiRes.data.data || apiRes.data;
+            setFormData({
+              id: item._id || item.id || id,
+              jobId: item.jobId || '',
+              jobTitle: item.jobTitle || 'QA junior job role',
+              jdLink: item.jdLink || '',
+              interviewRounds: item.interviewRounds || [],
+            });
+            setOriginalData(item);
+            return;
+          }
+        } catch (e) {
+          console.warn('API fetch failed, checking local cache:', e);
         }
-        
-        // Fetch from localStorage
+
+        // Fallback to local cache
         const data = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
-        const job = data.find(item => item.id === jobId);
+        const job = data.find(item => String(item.id) === String(id) || String(item._id) === String(id));
         
         if (job) {
           setFormData({
-            id: job.id,
+            id: job.id || job._id,
             jobId: job.jobId || '',
+            jobTitle: job.jobTitle || 'QA junior job role',
             jdLink: job.jdLink || '',
             interviewRounds: job.interviewRounds || [],
           });
@@ -125,6 +144,7 @@ const EditJobInterview = () => {
     
     return (
       formData.jobId !== originalData.jobId ||
+      formData.jobTitle !== originalData.jobTitle ||
       formData.jdLink !== originalData.jdLink ||
       JSON.stringify(formData.interviewRounds) !== JSON.stringify(originalData.interviewRounds)
     );
@@ -137,6 +157,83 @@ const EditJobInterview = () => {
       navigate('/job-interviews');
     }
   };
+
+  const validateForm = () => {
+    if (!formData.jobId.trim()) {
+      setError('Job ID is required');
+      return false;
+    }
+
+    for (const round of formData.interviewRounds) {
+      if (!round.name.trim()) {
+        setError('All interview rounds must have a name');
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const handleSave = async () => {
+    if (!validateForm()) return;
+
+    try {
+      setSaving(true);
+      setError('');
+
+      const apiPayload = {
+        jobId: formData.jobId.trim(),
+        jobTitle: formData.jobTitle?.trim() || 'QA junior job role',
+        jdLink: formData.jdLink.trim(),
+        candidates: typeof originalData?.candidates === 'number' ? originalData.candidates : 0,
+        team: Array.isArray(originalData?.team) ? originalData.team : [],
+        interviewRounds: formData.interviewRounds.map(r => ({
+          name: r.name.trim(),
+          interviewer: r.interviewer || 'somebody',
+          isSelfAssigned: Boolean(r.isSelfAssigned),
+        })),
+        organizationId: import.meta.env?.VITE_ORGANIZATION_ID || '6a0b4d7398ed27126dfd78ff',
+      };
+
+      try {
+        await updateJobInterview(formData.id || id, apiPayload);
+      } catch (e) {
+        console.warn('API update warning, synced locally:', e);
+      }
+
+      // Update in localStorage
+      const data = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
+      const updatedIndex = data.findIndex(item => String(item.id) === String(formData.id) || String(item._id) === String(formData.id));
+      
+      const updatedItem = {
+        ...(updatedIndex !== -1 ? data[updatedIndex] : {}),
+        ...apiPayload,
+        id: formData.id,
+        rounds: apiPayload.interviewRounds.length,
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (updatedIndex !== -1) {
+        data[updatedIndex] = updatedItem;
+      } else {
+        data.push(updatedItem);
+      }
+      
+      localStorage.setItem('jobInterviews', JSON.stringify(data));
+      setSuccess(true);
+      setOriginalData(updatedItem);
+      
+      setTimeout(() => {
+        navigate('/job-interviews');
+      }, 1200);
+
+    } catch (err) {
+      setError(err.message || 'Failed to update job interview. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
 
   const handleExitConfirm = () => {
     setShowExitDialog(false);
@@ -215,69 +312,6 @@ const EditJobInterview = () => {
         } : round
       )
     }));
-  };
-
-  const validateForm = () => {
-    // Validate Job ID
-    if (!formData.jobId.trim()) {
-      setError('Job ID is required');
-      return false;
-    }
-
-    // Validate each round has a name
-    for (const round of formData.interviewRounds) {
-      if (!round.name.trim()) {
-        setError('All interview rounds must have a name');
-        return false;
-      }
-    }
-
-    return true;
-  };
-
-  const handleSave = async () => {
-    if (!validateForm()) return;
-
-    try {
-      setSaving(true);
-      setError('');
-
-      // Prepare updated data
-      const updatedData = {
-        ...formData,
-        rounds: formData.interviewRounds.length,
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Update in localStorage
-      const data = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
-      const updatedIndex = data.findIndex(item => item.id === formData.id);
-      
-      if (updatedIndex !== -1) {
-        // Preserve other properties from original data
-        data[updatedIndex] = {
-          ...data[updatedIndex],
-          ...updatedData
-        };
-        
-        localStorage.setItem('jobInterviews', JSON.stringify(data));
-        
-        setSuccess(true);
-        setOriginalData(data[updatedIndex]);
-        
-        // Navigate back after success
-        setTimeout(() => {
-          navigate('/job-interviews');
-        }, 1500);
-      } else {
-        throw new Error('Job interview not found in database');
-      }
-
-    } catch (err) {
-      setError(err.message || 'Failed to update job interview. Please try again.');
-    } finally {
-      setSaving(false);
-    }
   };
 
   if (loading) {

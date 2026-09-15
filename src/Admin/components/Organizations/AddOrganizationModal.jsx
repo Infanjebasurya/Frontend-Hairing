@@ -56,13 +56,13 @@ const AddOrganizationModal = ({
   useEffect(() => {
     if (editingOrg) {
       setFormData({
-        name: editingOrg.name || '',
-        email: editingOrg.email || '',
+        name: editingOrg.name || editingOrg.companyName || '',
+        email: editingOrg.email || editingOrg.companyContactEmail || '',
         phone: editingOrg.phone || '',
-        address: editingOrg.address || '',
-        website: editingOrg.website || '',
-        linkedInUrl: editingOrg.linkedInUrl || '',
-        currentRole: editingOrg.currentRole || ''
+        address: editingOrg.address || editingOrg.companyAddress || '',
+        website: editingOrg.website || editingOrg.companyWebsite || '',
+        linkedInUrl: editingOrg.linkedInUrl || editingOrg.linkedInProfile || '',
+        currentRole: editingOrg.currentRole || 'CEO'
       });
     } else {
       resetForm();
@@ -131,13 +131,46 @@ const AddOrganizationModal = ({
     }
   };
 
-  const handleSubmit = () => {
+  const [modalLoading, setModalLoading] = useState(false);
+
+  const handleSubmit = async () => {
     if (!validateForm()) {
       return;
     }
 
     setSubmitError('');
-    onSubmit(formData);
+    setModalLoading(true);
+    try {
+      await onSubmit(formData);
+    } catch (err) {
+      console.error('Modal submit error:', err);
+      const isMxError = (err?.message || '').includes('ENODATA') || 
+                        (err?.message || '').includes('queryMx') || 
+                        (err?.message || '').includes('Invalid email domain');
+      const isConflict = !isMxError && (err?.response?.status === 409 || 
+                         (err?.message || '').includes('409') || 
+                         (err?.message || '').includes('exists') || 
+                         (err?.message || '').includes('Conflict'));
+      
+      let errorMsg = err.message || 'Failed to save organization. Please check the details.';
+      if (isMxError) {
+        errorMsg = `The email domain in "${formData.email}" does not have active MX records. Please use a valid email domain (e.g. @gmail.com, @aroha.co.in, @outlook.com).`;
+        setErrors(prev => ({
+          ...prev,
+          email: 'Please use a valid domain (e.g. @gmail.com)'
+        }));
+      } else if (isConflict) {
+        errorMsg = `This email (${formData.email}) is already registered to an organization. Please enter a different, unique email.`;
+        setErrors(prev => ({
+          ...prev,
+          email: 'This email is already in use'
+        }));
+      }
+      
+      setSubmitError(errorMsg);
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   const handleClose = () => {

@@ -22,6 +22,8 @@ import {
   Business
 } from '@mui/icons-material';
 import { getUserStats, initializeUsers } from '../../../services/userService';
+import { getOrgUsers } from '../../../services/orgUserService';
+import { getOrganizations, getOrganizationStats } from '../../../services/organizationService';
 import AppLoader from '../../../components/Common/AppLoader';
 
 const DashboardOverview = () => {
@@ -31,43 +33,110 @@ const DashboardOverview = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Initialize users with sample data if empty
-    initializeUsers();
-    
-    // Load stats
     loadStats();
   }, []);
 
-  const loadStats = () => {
+  const loadStats = async () => {
     setLoading(true);
     try {
-      const statsData = getUserStats();
+      let hrCount = 0;
+      let interviewerCount = 0;
+      let totalUsersCount = 0;
+      let orgCount = 1;
+
+      // 1. Fetch live Org Users
+      try {
+        const userRes = await getOrgUsers({
+          organizationId: import.meta.env?.VITE_ORGANIZATION_ID || '6a0b4d7398ed27126dfd78ff'
+        });
+        if (userRes.success && userRes.data) {
+          const list = Array.isArray(userRes.data.data) ? userRes.data.data : (Array.isArray(userRes.data) ? userRes.data : []);
+          totalUsersCount = list.length;
+          list.forEach(u => {
+            const role = (u.role || '').toUpperCase();
+            const currentRole = (u.currentRole || '').toLowerCase();
+            if (role === 'HR' || currentRole.includes('hr')) {
+              hrCount++;
+            } else {
+              interviewerCount++;
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Live users count fallback:', err);
+      }
+
+      // 2. Fetch live Organizations / Stats
+      try {
+        const statsRes = await getOrganizationStats();
+        if (statsRes.success && statsRes.data) {
+          const payload = statsRes.data.data || statsRes.data;
+          if (payload && typeof payload.totalOrganizations === 'number') {
+            orgCount = payload.totalOrganizations;
+          } else if (payload && typeof payload.total === 'number') {
+            orgCount = payload.total;
+          }
+        }
+      } catch (e) {
+        // Fallback to getOrganizations
+      }
+
+      try {
+        const orgRes = await getOrganizations();
+        if (orgRes.success && orgRes.data) {
+          const payloadData = orgRes.data.data || orgRes.data;
+          const orgList = Array.isArray(payloadData?.organizations)
+            ? payloadData.organizations
+            : Array.isArray(orgRes.data?.organizations)
+            ? orgRes.data.organizations
+            : Array.isArray(payloadData?.items)
+            ? payloadData.items
+            : Array.isArray(payloadData)
+            ? payloadData
+            : Array.isArray(orgRes.data)
+            ? orgRes.data
+            : [];
+          if (orgList.length > 0) orgCount = Math.max(orgCount, orgList.length);
+        }
+      } catch (err) {
+        console.warn('Live org count fallback:', err);
+      }
+
+      // 3. Fallback to local user stats if 0
+      if (totalUsersCount === 0) {
+        initializeUsers();
+        const localStats = getUserStats();
+        hrCount = localStats.totalHR || 1;
+        interviewerCount = localStats.totalInterviewers || 2;
+        totalUsersCount = localStats.totalUsers || 3;
+        orgCount = localStats.totalOrganizations || 1;
+      }
       
       const statsArray = [
         { 
           title: 'Total HR Users', 
-          value: statsData.totalHR.toString(), 
+          value: hrCount.toString(), 
           icon: <People />, 
           color: '#3498DB',
           description: 'Human Resource managers'
         },
         { 
           title: 'Total Interviewers', 
-          value: statsData.totalInterviewers.toString(), 
+          value: interviewerCount.toString(), 
           icon: <Group />, 
           color: '#2ECC71',
           description: 'Active interviewers'
         },
         { 
           title: 'Total Users', 
-          value: statsData.totalUsers.toString(), 
+          value: totalUsersCount.toString(), 
           icon: <Person />, 
           color: '#9B59B6',
           description: 'All system users'
         },
         { 
           title: 'Total Organizations', 
-          value: (statsData.totalOrganizations || '12').toString(),
+          value: orgCount.toString(),
           icon: <Business />, 
           color: '#E74C3C',
           description: 'Registered organizations'

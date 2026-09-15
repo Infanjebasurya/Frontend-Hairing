@@ -33,6 +33,7 @@ import {
 import AppLoader from '../../../components/Common/AppLoader';
 import { updateUser, getUserById } from '../../../services/userService';
 import { getOrganizations } from '../../../services/organizationService';
+import { getOrgUser, updateOrgUser, getOrgUserConstants } from '../../../services/orgUserService';
 
 const EditUser = ({ userId, onSave, onCancel }) => {
   const theme = useTheme();
@@ -40,14 +41,18 @@ const EditUser = ({ userId, onSave, onCancel }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [organizations, setOrganizations] = useState([]);
+  const [availableRoles, setAvailableRoles] = useState(['ORGANIZATION_ADMIN', 'HR', 'INTERVIEWER']);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: '',
+    role: 'INTERVIEWER',
     organization: '',
-    status: 'active'
+    status: 'active',
+    currentRole: 'Software Engineer',
+    phone: '',
+    address: '',
   });
 
   const [errors, setErrors] = useState({
@@ -64,23 +69,144 @@ const EditUser = ({ userId, onSave, onCancel }) => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load organizations
-      const orgsData = getOrganizations();
-      setOrganizations(orgsData);
+      // 1. Load organizations from live API
+      let formattedOrgs = [];
+      try {
+        const orgsRes = await getOrganizations();
+        let rawOrgs = [];
+        if (orgsRes.success && orgsRes.data) {
+          const payloadData = orgsRes.data.data || orgsRes.data;
+          rawOrgs = Array.isArray(payloadData?.organizations)
+            ? payloadData.organizations
+            : Array.isArray(orgsRes.data?.organizations)
+            ? orgsRes.data.organizations
+            : Array.isArray(payloadData?.items)
+            ? payloadData.items
+            : Array.isArray(payloadData)
+            ? payloadData
+            : Array.isArray(orgsRes.data)
+            ? orgsRes.data
+            : [];
+        }
 
-      // Load user data
-      const userData = getUserById(userId);
-      if (userData) {
-        setFormData({
-          name: userData.name || '',
-          email: userData.email || '',
-          role: userData.role || '',
-          organization: userData.organization || '',
-          status: userData.status || 'active'
-        });
-      } else {
-        showSnackbar('User not found', 'error');
-        onCancel();
+        // Merge with created_orgs from localStorage if any
+        try {
+          const storedCreated = localStorage.getItem('created_orgs');
+          if (storedCreated) {
+            const parsed = JSON.parse(storedCreated);
+            if (Array.isArray(parsed)) {
+              parsed.forEach(storedOrg => {
+                const id = storedOrg._id || storedOrg.id;
+                if (!rawOrgs.some(o => (o._id || o.id) === id)) {
+                  rawOrgs.unshift(storedOrg);
+                }
+              });
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+
+        formattedOrgs = rawOrgs.map((o, idx) => ({
+          id: o._id || o.id || `org-${idx}`,
+          _id: o._id || o.id,
+          name: o.companyName || o.name || 'Organization',
+          companyName: o.companyName || o.name || 'Organization',
+          status: (o.status || 'ACTIVE').toLowerCase()
+        }));
+        setOrganizations(formattedOrgs);
+      } catch (err) {
+        console.warn('Organizations fetch fallback:', err);
+      }
+
+      // 2. Load constants
+      try {
+        const constRes = await getOrgUserConstants();
+        if (constRes.success && constRes.data) {
+          const roles = constRes.data.data?.roles || constRes.data.roles || constRes.data;
+          if (Array.isArray(roles) && roles.length > 0) {
+            setAvailableRoles(roles);
+          }
+        }
+      } catch (err) {
+        // fallback to default roles
+      }
+
+      // 3. Load user data from live API
+      let userFound = false;
+      let storedUserOrgMap = {};
+      try {
+        const stored = localStorage.getItem('user_org_map');
+        if (stored) storedUserOrgMap = JSON.parse(stored);
+      } catch (e) {
+        // ignore
+      }
+
+      try {
+        const res = await getOrgUser(userId);
+        if (res.success && res.data) {
+          const u = res.data.data || res.data;
+          let userOrgId = storedUserOrgMap[userId];
+          
+          if (!userOrgId) {
+            if (u.organizationId && typeof u.organizationId === 'object') {
+              userOrgId = u.organizationId._id || u.organizationId.id;
+              // If organization object is available, make sure it's in organizations list
+              const orgObj = {
+                id: u.organizationId._id || u.organizationId.id,
+                _id: u.organizationId._id || u.organizationId.id,
+                name: u.organizationId.companyName || u.organizationId.name || 'Organization',
+                companyName: u.organizationId.companyName || u.organizationId.name || 'Organization',
+                status: (u.organizationId.status || 'ACTIVE').toLowerCase()
+              };
+              setOrganizations(prev => {
+                if (!prev.some(o => (o._id || o.id) === orgObj._id)) {
+                  return [orgObj, ...prev];
+                }
+                return prev;
+              });
+            } else if (typeof u.organizationId === 'string') {
+              userOrgId = u.organizationId;
+            } else if (u.organization && typeof u.organization === 'object') {
+              userOrgId = u.organization._id || u.organization.id;
+            } else if (typeof u.organization === 'string') {
+              userOrgId = u.organization;
+            } else {
+              userOrgId = '';
+            }
+          }
+
+          setFormData({
+            name: u.fullName || u.name || '',
+            email: u.companyEmail || u.email || '',
+            role: (u.role || 'INTERVIEWER').toUpperCase(),
+            organization: userOrgId || '',
+            status: (u.status || 'active').toLowerCase(),
+            currentRole: u.currentRole || 'Software Engineer',
+            phone: u.phone || '',
+            address: u.address || '',
+          });
+          userFound = true;
+        }
+      } catch (err) {
+        console.warn('Live user fetch fallback:', err);
+      }
+
+      if (!userFound) {
+        const userData = getUserById(userId);
+        if (userData) {
+          const userOrgId = storedUserOrgMap[userId] || userData.organization || userData.organizationId || '';
+          setFormData({
+            name: userData.name || '',
+            email: userData.email || '',
+            role: (userData.role || 'INTERVIEWER').toUpperCase(),
+            organization: userOrgId,
+            status: userData.status || 'active',
+            currentRole: userData.currentRole || 'Software Engineer',
+            phone: userData.phone || '',
+            address: userData.address || '',
+          });
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -153,43 +279,31 @@ const EditUser = ({ userId, onSave, onCancel }) => {
 
   const handleOrganizationChange = (event, newValue) => {
     if (newValue && typeof newValue === 'object') {
-      // Selected from dropdown - use the organization ID
+      const orgId = newValue._id || newValue.id;
       setFormData(prev => ({
         ...prev,
-        organization: newValue.id
+        organization: orgId
       }));
     } else if (typeof newValue === 'string' && newValue.trim()) {
-      // Manual input - create a new organization ID from the name
-      const newOrgId = newValue.toLowerCase().replace(/\s+/g, '-');
+      const matching = organizations.find(o => 
+        (o.name && o.name.toLowerCase() === newValue.toLowerCase()) || 
+        (o.companyName && o.companyName.toLowerCase() === newValue.toLowerCase())
+      );
       setFormData(prev => ({
         ...prev,
-        organization: newOrgId
+        organization: matching ? (matching._id || matching.id) : newValue
       }));
     } else {
-      // Cleared or empty
       setFormData(prev => ({
         ...prev,
         organization: ''
       }));
     }
 
-    // Clear error
     if (errors.organization) {
       setErrors(prev => ({
         ...prev,
         organization: ''
-      }));
-    }
-  };
-
-  const handleOrganizationInputChange = (event, newInputValue) => {
-    // This handles the input field changes for free text
-    if (newInputValue && !organizations.find(org => org.name === newInputValue)) {
-      // If it's a new organization not in the list
-      const newOrgId = newInputValue.toLowerCase().replace(/\s+/g, '-');
-      setFormData(prev => ({
-        ...prev,
-        organization: newOrgId
       }));
     }
   };
@@ -204,19 +318,69 @@ const EditUser = ({ userId, onSave, onCancel }) => {
 
     setSaving(true);
     try {
-      // Prepare the updated user data
+      // 1. Call Backend API PUT /api/org-users/:id
+      const payload = {
+        fullName: formData.name,
+        name: formData.name,
+        companyEmail: formData.email,
+        email: formData.email,
+        phone: formData.phone || '',
+        address: formData.address || '',
+        role: formData.role,
+        currentRole: formData.currentRole,
+        organizationId: formData.organization || undefined
+      };
+
+      try {
+        await updateOrgUser(userId, payload);
+      } catch (apiErr) {
+        console.warn('Live user update fallback:', apiErr);
+      }
+
+      // 2. Save user organization and role mappings
+      if (formData.organization) {
+        try {
+          let map = {};
+          const s = localStorage.getItem('user_org_map');
+          if (s) map = JSON.parse(s);
+          map[userId] = formData.organization;
+          localStorage.setItem('user_org_map', JSON.stringify(map));
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (formData.email) {
+        try {
+          let roleMap = {};
+          const s = localStorage.getItem('user_role_map');
+          if (s) roleMap = JSON.parse(s);
+          roleMap[formData.email.toLowerCase()] = {
+            role: formData.role,
+            currentRole: formData.currentRole,
+            isOrgAdmin: formData.role === 'ADMIN' || formData.role === 'ORGANIZATION_ADMIN'
+          };
+          localStorage.setItem('user_role_map', JSON.stringify(roleMap));
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // 3. Prepare the updated user data for local fallback
       const updatedUserData = {
         ...formData,
-        // Ensure we have the organization name for display
+        organization: formData.organization,
         organizationName: getSelectedOrganization()?.name || formData.organization
       };
 
       await updateUser(userId, updatedUserData);
       showSnackbar('User updated successfully!');
-      onSave();
+      setTimeout(() => {
+        onSave();
+      }, 500);
     } catch (error) {
       console.error('Error updating user:', error);
-      showSnackbar('Error updating user', 'error');
+      showSnackbar(error.message || 'Error updating user', 'error');
     } finally {
       setSaving(false);
     }
@@ -231,12 +395,17 @@ const EditUser = ({ userId, onSave, onCancel }) => {
     if (!formData.organization) return null;
     
     // First try to find by ID
-    let org = organizations.find(org => org.id === formData.organization);
+    let org = organizations.find(org => 
+      (org._id && org._id === formData.organization) || 
+      (org.id && org.id === formData.organization)
+    );
     
-    // If not found by ID, try to find by name (for backward compatibility)
+    // If not found by ID, try to find by name (for backward compatibility) safely
     if (!org) {
+      const searchTarget = String(formData.organization).toLowerCase();
       org = organizations.find(org => 
-        org.name.toLowerCase() === formData.organization.toLowerCase()
+        (org.name && String(org.name).toLowerCase() === searchTarget) ||
+        (org.companyName && String(org.companyName).toLowerCase() === searchTarget)
       );
     }
     
@@ -727,7 +896,6 @@ const EditUser = ({ userId, onSave, onCancel }) => {
                           }
                           value={getOrganizationDisplayValue()}
                           onChange={handleOrganizationChange}
-                          onInputChange={handleOrganizationInputChange}
                           disabled={saving}
                           renderInput={(params) => (
                             <TextField
@@ -736,8 +904,8 @@ const EditUser = ({ userId, onSave, onCancel }) => {
                               size="small"
                               required
                               error={!!errors.organization}
-                              helperText={errors.organization || "Select from list or type to create new"}
-                              placeholder="Select or type organization name"
+                              helperText={errors.organization || "Select organization from list"}
+                              placeholder="Select organization"
                               sx={{
                                 '& .MuiOutlinedInput-root': {
                                   borderRadius: 1,
@@ -764,27 +932,33 @@ const EditUser = ({ userId, onSave, onCancel }) => {
                               }}
                             />
                           )}
-                          renderOption={(props, option) => (
-                            <li {...props}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Business fontSize="small" color="primary" />
-                                <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                                  {option.name}
-                                </Typography>
-                                {option.status && (
-                                  <Chip 
-                                    label={option.status} 
-                                    size="small" 
-                                    color={option.status === 'active' ? 'success' : 'default'}
-                                    sx={{ ml: 'auto', fontSize: '0.7rem' }}
-                                  />
-                                )}
-                              </Box>
-                            </li>
-                          )}
-                          isOptionEqualToValue={(option, value) => 
-                            option.id === (value?.id || value)
-                          }
+                          renderOption={(props, option) => {
+                            const { key, ...otherProps } = props;
+                            return (
+                              <li key={key || option._id || option.id} {...otherProps}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Business fontSize="small" color="primary" />
+                                  <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                                    {option.name || option.companyName}
+                                  </Typography>
+                                  {option.status && (
+                                    <Chip 
+                                      label={option.status} 
+                                      size="small" 
+                                      color={option.status === 'active' ? 'success' : 'default'}
+                                      sx={{ ml: 'auto', fontSize: '0.7rem' }}
+                                    />
+                                  )}
+                                </Box>
+                              </li>
+                            );
+                          }}
+                          isOptionEqualToValue={(option, value) => {
+                            if (!value) return false;
+                            const valId = value?._id || value?.id || value;
+                            const optId = option?._id || option?.id;
+                            return optId === valId || option?.name === (value?.name || value);
+                          }}
                           sx={{
                             '& .MuiAutocomplete-root': {
                               height: '40px'

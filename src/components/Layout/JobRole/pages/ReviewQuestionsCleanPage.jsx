@@ -32,6 +32,12 @@ import { useNavigate } from 'react-router-dom';
 import QuestionsGenerationLayout from '../components/QuestionsGenerationLayout';
 import { useJobRole } from '../useJobRole';
 import { questionTypeDefinitions } from '../questionGenerationData';
+import {
+  createBulkQuestions,
+  normalizeQuestionType,
+  normalizeDifficulty,
+  DEFAULT_ORG_ID,
+} from '../../../../services/questionBankService';
 
 const ReviewQuestionsCleanPage = () => {
   const navigate = useNavigate();
@@ -55,6 +61,7 @@ const ReviewQuestionsCleanPage = () => {
     toggleBankQuestion,
     addBankQuestion,
     questionBank,
+    fetchQuestionBankFromApi,
   } = useJobRole();
   const [previewQuestion, setPreviewQuestion] = useState(null);
   const [editingQuestion, setEditingQuestion] = useState(null);
@@ -110,12 +117,13 @@ const ReviewQuestionsCleanPage = () => {
     return 10;
   };
 
-  const handleSaveSelectedToBank = () => {
+  const handleSaveSelectedToBank = async () => {
     const existingKeys = new Set((questionBank || []).map((row) => normalizePromptKey(row.question)));
     const topic = resolveTopicForBank();
 
     let addedCount = 0;
     let skippedCount = 0;
+    const itemsToSave = [];
 
     for (const item of selectedGeneratedQuestions) {
       const prompt = String(item?.prompt || '').trim();
@@ -130,19 +138,33 @@ const ReviewQuestionsCleanPage = () => {
         continue;
       }
 
-      addBankQuestion({
+      const rawQuestionType = item.rawType || normalizeQuestionType(item.type);
+      const questionPayload = {
         question: prompt,
-        type: item?.type || selectedQuestionType?.label || 'Theory',
-        difficulty: item?.difficulty || 'Medium',
-        topic,
+        questionType: rawQuestionType,
+        dificulty: normalizeDifficulty(item.difficulty),
+        topic: [topic],
+        jobId: jobDetails.jobId || 'JOB001',
+        orgId: DEFAULT_ORG_ID,
+        expectedAnswer: item.answer || item.expectedAnswer || '',
+        options: item.options || [],
+        correctOptionIndex: item.correctOptionIndex,
+        correctOptionIndexes: item.correctOptionIndexes,
+        blanks: item.blanks || item.blankAnswers || [],
+        matchingPair: item.pairs || [],
+        orderedItems: item.orderedItems || [],
+        starterCode: item.starterCode || '',
+        expectedOutput: item.expectedOutput || '',
+        evaluationNotes: item.evaluationNotes || '',
         points: resolvePointsForBank(item?.difficulty),
-      });
+      };
 
+      itemsToSave.push(questionPayload);
       existingKeys.add(key);
       addedCount += 1;
     }
 
-    if (!addedCount) {
+    if (!itemsToSave.length) {
       setBankSaveToast({
         open: true,
         message: skippedCount
@@ -153,11 +175,31 @@ const ReviewQuestionsCleanPage = () => {
       return;
     }
 
-    setBankSaveToast({
-      open: true,
-      message: `Saved ${addedCount} question(s) to Question Bank${skippedCount ? ` (skipped ${skippedCount}).` : '.'}`,
-      severity: 'success',
-    });
+    try {
+      const res = await createBulkQuestions(itemsToSave, jobDetails.jobId || 'JOB001', DEFAULT_ORG_ID);
+      if (res.success) {
+        if (typeof fetchQuestionBankFromApi === 'function') {
+          fetchQuestionBankFromApi();
+        }
+        setBankSaveToast({
+          open: true,
+          message: `Saved ${itemsToSave.length} question(s) to Question Bank${skippedCount ? ` (skipped ${skippedCount}).` : '.'}`,
+          severity: 'success',
+        });
+      } else {
+        setBankSaveToast({
+          open: true,
+          message: res.error || 'Failed to save questions to bank',
+          severity: 'error',
+        });
+      }
+    } catch (err) {
+      setBankSaveToast({
+        open: true,
+        message: `Error: ${err.message}`,
+        severity: 'error',
+      });
+    }
   };
 
   const isMetaDetail = (detail) => {
@@ -670,48 +712,17 @@ const ReviewQuestionsCleanPage = () => {
         )}
       </Stack>
 
-      <Stack spacing={2} sx={{ pt: 1 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>
-          Final Summary
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Source: {questionSource === 'bank' ? 'Question Bank' : 'Create New Set'} | Primary Type:{' '}
-          {selectedQuestionType?.label} | Output Format: {jobDetails.outputFormat}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Selected generated questions: {selectedGeneratedQuestions.length} | Selected bank questions:{' '}
-          {selectedBankQuestions.length}
-        </Typography>
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-          {selectedBankQuestions.map((question) => (
-            <Chip key={question.id} label={question.id} color="primary" variant="outlined" />
-          ))}
-        </Stack>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="flex-end">
-          <Button variant="outlined" onClick={() => navigate('/job-role/question-bank')}>
-            Back to Bank
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={handleSaveSelectedToBank}
-            disabled={!selectedGeneratedQuestions.length}
-          >
-            Save Selected to Bank
-          </Button>
-          <Button variant="contained" onClick={handleFinalize}>
-            Finalize JSON Output
-          </Button>
-        </Stack>
-        {(outputPreview || finalizedOutput) && (
-          <TextField
-            fullWidth
-            multiline
-            minRows={10}
-            label="Final Output JSON"
-            value={outputPreview || JSON.stringify(finalizedOutput, null, 2)}
-            InputProps={{ readOnly: true }}
-          />
-        )}
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="flex-end" sx={{ pt: 3 }}>
+        <Button variant="outlined" onClick={() => navigate('/job-role/question-bank')}>
+          Back to Bank
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleSaveSelectedToBank}
+          disabled={!selectedGeneratedQuestions.length}
+        >
+          Save Selected to Bank
+        </Button>
       </Stack>
 
       <Dialog open={Boolean(previewQuestion)} onClose={() => setPreviewQuestion(null)} fullWidth maxWidth="sm">

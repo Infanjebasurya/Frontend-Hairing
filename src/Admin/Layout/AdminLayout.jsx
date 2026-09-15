@@ -11,6 +11,8 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  Menu,
+  MenuItem,
   useTheme,
   useMediaQuery,
   Collapse,
@@ -28,7 +30,9 @@ import {
   Brightness4,
   Brightness7,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Work,
+  Assignment,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -36,10 +40,11 @@ const drawerWidth = 240;
 const collapsedDrawerWidth = 64;
 
 const AdminLayout = ({ children, darkMode, onToggleTheme, onLogout, user }) => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [logoutAnchorEl, setLogoutAnchorEl] = useState(null);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -156,7 +161,6 @@ const AdminLayout = ({ children, darkMode, onToggleTheme, onLogout, user }) => {
               disableHoverListener={!collapsed}
             >
               <ListItem
-                button
                 onClick={() => handleNavigation(item.path)}
                 sx={{
                   mb: 1,
@@ -320,9 +324,9 @@ const AdminLayout = ({ children, darkMode, onToggleTheme, onLogout, user }) => {
               </IconButton>
             </Tooltip>
 
-            <Tooltip title="Logout">
+            <Tooltip title="Logout Options">
               <IconButton 
-                onClick={onLogout} 
+                onClick={(e) => setLogoutAnchorEl(e.currentTarget)} 
                 color="inherit"
                 sx={{
                   cursor: 'pointer'
@@ -331,6 +335,36 @@ const AdminLayout = ({ children, darkMode, onToggleTheme, onLogout, user }) => {
                 <Logout />
               </IconButton>
             </Tooltip>
+
+            <Menu
+              anchorEl={logoutAnchorEl}
+              open={Boolean(logoutAnchorEl)}
+              onClose={() => setLogoutAnchorEl(null)}
+              PaperProps={{
+                elevation: 3,
+                sx: {
+                  mt: 1.5,
+                  minWidth: 220,
+                  p: 0.5,
+                  '& .MuiMenuItem-root': {
+                    fontSize: '0.875rem',
+                  }
+                }
+              }}
+            >
+              <MenuItem onClick={() => { setLogoutAnchorEl(null); if (onLogout) onLogout(false); }}>
+                <ListItemIcon>
+                  <Logout fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Logout (Current Device)</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { setLogoutAnchorEl(null); if (onLogout) onLogout(true); }}>
+                <ListItemIcon>
+                  <Logout fontSize="small" color="error" />
+                </ListItemIcon>
+                <ListItemText sx={{ color: 'error.main' }}>Logout All Devices</ListItemText>
+              </MenuItem>
+            </Menu>
           </Box>
         </Toolbar>
       </AppBar>
