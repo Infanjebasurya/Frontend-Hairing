@@ -29,6 +29,7 @@ import {
 } from '@mui/icons-material';
 import { addUser } from '../../../services/userService';
 import { getOrganizations } from '../../../services/organizationService';
+import { createOrgUser, getOrgUserConstants } from '../../../services/orgUserService';
 
 const AddUser = ({ darkMode, onSave, onCancel }) => {
   const theme = useTheme();
@@ -36,10 +37,14 @@ const AddUser = ({ darkMode, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: '',
-    organization: ''
+    role: 'INTERVIEWER',
+    currentRole: 'Software Engineer',
+    organization: import.meta.env?.VITE_ORGANIZATION_ID || '6a0b4d7398ed27126dfd78ff',
+    password: 'User@123',
+    phone: '',
   });
   const [organizations, setOrganizations] = useState([]);
+  const [availableRoles, setAvailableRoles] = useState(['ORGANIZATION_ADMIN', 'HR', 'INTERVIEWER']);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -48,13 +53,74 @@ const AddUser = ({ darkMode, onSave, onCancel }) => {
 
   useEffect(() => {
     loadOrganizations();
+    loadConstants();
   }, []);
 
-  const loadOrganizations = () => {
+  const loadConstants = async () => {
     try {
-      const orgsData = getOrganizations();
-      const activeOrgs = orgsData.filter(org => org.status === 'active');
-      setOrganizations(activeOrgs);
+      const res = await getOrgUserConstants();
+      if (res.success && res.data) {
+        const roles = res.data.data?.roles || res.data.roles || res.data;
+        if (Array.isArray(roles) && roles.length > 0) {
+          setAvailableRoles(roles);
+        }
+      }
+    } catch (err) {
+      console.warn('Constants API fallback:', err);
+    }
+  };
+
+  const loadOrganizations = async () => {
+    try {
+      const orgsRes = await getOrganizations();
+      let rawOrgs = [];
+      if (orgsRes.success && orgsRes.data) {
+        const payloadData = orgsRes.data.data || orgsRes.data;
+        rawOrgs = Array.isArray(payloadData?.organizations)
+          ? payloadData.organizations
+          : Array.isArray(orgsRes.data?.organizations)
+          ? orgsRes.data.organizations
+          : Array.isArray(payloadData?.items)
+          ? payloadData.items
+          : Array.isArray(payloadData)
+          ? payloadData
+          : Array.isArray(orgsRes.data)
+          ? orgsRes.data
+          : [];
+      }
+
+      // Merge with created_orgs from localStorage if any
+      try {
+        const storedCreated = localStorage.getItem('created_orgs');
+        if (storedCreated) {
+          const parsed = JSON.parse(storedCreated);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(storedOrg => {
+              const id = storedOrg._id || storedOrg.id;
+              if (!rawOrgs.some(o => (o._id || o.id) === id)) {
+                rawOrgs.unshift(storedOrg);
+              }
+            });
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      const formatted = rawOrgs.map((o, idx) => ({
+        id: o._id || o.id || `org-${idx}`,
+        _id: o._id || o.id,
+        name: o.companyName || o.name || 'Organization',
+        companyName: o.companyName || o.name || 'Organization',
+        status: (o.status || 'ACTIVE').toLowerCase()
+      }));
+      setOrganizations(formatted);
+      if (formatted.length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          organization: prev.organization || formatted[0]._id || formatted[0].id
+        }));
+      }
     } catch (error) {
       console.error('Error loading organizations:', error);
     }
@@ -77,10 +143,6 @@ const AddUser = ({ darkMode, onSave, onCancel }) => {
       newErrors.role = 'Role is required';
     }
 
-    if (!formData.organization) {
-      newErrors.organization = 'Organization is required';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -91,23 +153,42 @@ const AddUser = ({ darkMode, onSave, onCancel }) => {
       setLoading(true);
       try {
         // Find selected organization
-        const selectedOrg = organizations.find(org => org.id === formData.organization);
+        const selectedOrg = organizations.find(org => org._id === formData.organization || org.id === formData.organization);
         
-        // Prepare user data
+        // 1. Call Backend API POST /api/org-users
+        const apiPayload = {
+          organizationId: formData.organization || import.meta.env?.VITE_ORGANIZATION_ID || '6a0b4d7398ed27126dfd78ff',
+          fullName: formData.name.trim(),
+          companyEmail: formData.email.trim(),
+          password: formData.password || 'User@123',
+          confirmPassword: formData.password || 'User@123',
+          phone: formData.phone || '',
+          role: formData.role || 'INTERVIEWER',
+          currentRole: formData.currentRole || 'Software Engineer',
+        };
+
+        const res = await createOrgUser(apiPayload);
+        
+        if (res.error && !res.success) {
+          throw new Error(res.error);
+        }
+
+        // 2. Prepare user data for local state
         const userData = {
           name: formData.name,
           email: formData.email,
           role: formData.role,
+          currentRole: formData.currentRole || 'Software Engineer',
           organization: formData.organization,
-          organizationName: selectedOrg ? selectedOrg.name : newOrgName
+          organizationName: selectedOrg ? (selectedOrg.name || selectedOrg.companyName) : newOrgName,
         };
 
-        // Save user to localStorage
+        // Save user to localStorage fallback
         addUser(userData);
         
         setSnackbar({ 
           open: true, 
-          message: 'User created successfully!', 
+          message: 'User created successfully in organization!', 
           severity: 'success' 
         });
         
@@ -118,10 +199,20 @@ const AddUser = ({ darkMode, onSave, onCancel }) => {
         
       } catch (error) {
         console.error('Error creating user:', error);
+        const isMxError = (error.message || '').includes('ENODATA') || (error.message || '').includes('queryMx') || (error.message || '').includes('Invalid email domain');
+        const isConflict = !isMxError && ((error.message || '').includes('409') || (error.message || '').includes('exists') || (error.message || '').includes('duplicate'));
+        
+        let msg = error.message || 'Error creating user';
+        if (isMxError) {
+          msg = `Email domain in "${formData.email}" does not have active MX records. Please use a valid domain (e.g. @gmail.com, @aroha.co.in).`;
+        } else if (isConflict) {
+          msg = `A user with email "${formData.email}" already exists. Please use a unique email address.`;
+        }
+
         setSnackbar({ 
           open: true, 
-          message: 'Error creating user', 
-          severity: 'error' 
+          message: msg, 
+          severity: isConflict ? 'warning' : 'error' 
         });
       } finally {
         setLoading(false);
@@ -554,10 +645,10 @@ const AddUser = ({ darkMode, onSave, onCancel }) => {
                         <em>Select an organization</em>
                       </MenuItem>
                       {organizations.map((org) => (
-                        <MenuItem key={org.id} value={org.id}>
+                        <MenuItem key={org._id || org.id} value={org._id || org.id}>
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                             <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                              {org.name}
+                              {org.name || org.companyName}
                             </Typography>
                             {org.status === 'active' && (
                               <Box

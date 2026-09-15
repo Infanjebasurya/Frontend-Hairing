@@ -1,4 +1,5 @@
 // src/services/userService.js
+import { createOrgUser } from './orgUserService';
 
 const STORAGE_KEY = 'admin_users';
 
@@ -35,18 +36,29 @@ export const saveUsers = (users) => {
   }
 };
 
-// Add a new user
-export const addUser = (userData) => {
+// Add a new organization user (Calls POST /api/org-users)
+export const addUser = async (userData) => {
+  let createdUser = null;
+  try {
+    const apiResult = await createOrgUser(userData);
+    createdUser = apiResult.user;
+  } catch (err) {
+    console.warn('createOrgUser API call error, using local fallback:', err);
+  }
+
+  if (!createdUser) {
+    createdUser = {
+      id: Date.now(),
+      ...userData,
+      createdAt: new Date().toISOString(),
+      status: 'active'
+    };
+  }
+
   const users = getUsers();
-  const newUser = {
-    id: Date.now(), // Simple ID generation
-    ...userData,
-    createdAt: new Date().toISOString(),
-    status: 'active'
-  };
-  users.push(newUser);
+  users.push(createdUser);
   saveUsers(users);
-  return newUser;
+  return createdUser;
 };
 
 // Update user

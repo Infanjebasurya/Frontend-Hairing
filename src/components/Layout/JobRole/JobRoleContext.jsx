@@ -1,6 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { generatedQuestions, questionBankRows, questionTypeDefinitions, questionTypeRequirementMap } from './questionGenerationData';
 import { JobRoleContext } from './jobRoleStore';
+import {
+  getQuestionBank,
+  createQuestion as apiCreateQuestion,
+  updateQuestion as apiUpdateQuestion,
+  deleteQuestion as apiDeleteQuestion,
+  createBulkQuestions as apiCreateBulkQuestions,
+} from '../../../services/questionBankService';
 
 const defaultJobDetails = {
   jobId: 'JOB-2026-014',
@@ -21,6 +29,7 @@ const defaultCoverageState = Object.fromEntries(
 );
 
 export const JobRoleProvider = ({ children }) => {
+  const location = useLocation();
   const storageKey = 'questions-generation-state';
   const loadStoredState = () => {
     try {
@@ -38,8 +47,28 @@ export const JobRoleProvider = ({ children }) => {
 
   const storedState = loadStoredState();
   const [jobDetails, setJobDetails] = useState(storedState?.jobDetails || defaultJobDetails);
+
+  // Sync with location.state if navigated from a specific Job Interview row
+  useEffect(() => {
+    if (location.state?.jobData) {
+      const jd = location.state.jobData;
+      setJobDetails((prev) => ({
+        ...prev,
+        jobId: jd.jobId || jd.id || prev.jobId,
+        jobRole: jd.jobTitle || jd.title || jd.role || prev.jobRole,
+      }));
+      setQuestionSource('new_set');
+    } else if (location.state?.jobDetails) {
+      setJobDetails((prev) => ({ ...prev, ...location.state.jobDetails }));
+      setQuestionSource('new_set');
+    }
+  }, [location.state]);
   const [selectedCandidate, setSelectedCandidate] = useState(storedState?.selectedCandidate || null);
-  const [questionSource, setQuestionSource] = useState(storedState?.questionSource || 'bank');
+  const [questionSource, setQuestionSource] = useState(
+    storedState?.questionSource && storedState.questionSource !== 'bank'
+      ? storedState.questionSource
+      : 'new_set'
+  );
   const [newSetMode, setNewSetMode] = useState(storedState?.newSetMode || 'automatic');
   const [questionType, setQuestionType] = useState(storedState?.questionType || 'theory');
   const [numberOfQuestions, setNumberOfQuestions] = useState(storedState?.numberOfQuestions || 6);
@@ -58,6 +87,27 @@ export const JobRoleProvider = ({ children }) => {
   const [finalizedOutput, setFinalizedOutput] = useState(storedState?.finalizedOutput || null);
   const [lastGeneratedAt, setLastGeneratedAt] = useState(storedState?.lastGeneratedAt || null);
   const [questionTypeCoverage, setQuestionTypeCoverage] = useState(storedState?.questionTypeCoverage || defaultCoverageState);
+  const [bankLoading, setBankLoading] = useState(false);
+
+  const fetchQuestionBankFromApi = useCallback(async () => {
+    setBankLoading(true);
+    try {
+      const res = await getQuestionBank();
+      if (res.success && Array.isArray(res.questions)) {
+        if (res.questions.length > 0) {
+          setQuestionBank(res.questions);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not load bank questions from backend API:', err);
+    } finally {
+      setBankLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchQuestionBankFromApi();
+  }, [fetchQuestionBankFromApi]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -185,9 +235,18 @@ export const JobRoleProvider = ({ children }) => {
       ],
     };
 
+    if (normalizedType === 'theory' || normalizedType === 'short_answer') {
+      newQuestion.answer = `Candidate should demonstrate hands-on understanding of ${activeSkills.join(', ')} in the context of ${jobDetails.jobRole}.`;
+    }
+
     if (normalizedType === 'single_correct' || normalizedType === 'multiple_correct') {
       newQuestion.options = ['Option A', 'Option B', 'Option C', 'Option D'];
       newQuestion.details.push('Options configured: 4');
+    }
+
+    if (normalizedType === 'fill_blanks') {
+      newQuestion.blanks = 2;
+      newQuestion.blankAnswers = [activeSkills[0] || 'framework', activeSkills[1] || 'testing'];
     }
 
     if (normalizedType === 'matching') {
@@ -202,25 +261,56 @@ export const JobRoleProvider = ({ children }) => {
       newQuestion.orderedItems = ['Review job details', 'Select question type', 'Generate question', 'Assign to job ID'];
     }
 
+    if (normalizedType === 'practical') {
+      newQuestion.starterCode = `function test${activeSkills[0]?.replace(/[^a-zA-Z0-9]/g, '') || 'Solution'}() {\n  // Implementation here\n}`;
+      newQuestion.expectedOutput = 'Passed all test cases';
+      newQuestion.evaluationNotes = `Check adherence to best practices in ${activeSkills.join(', ')}.`;
+    }
+
     setGeneratedQuestionList((prev) => [newQuestion, ...prev]);
     setSelectedGeneratedIds((prev) => [newQuestion.id, ...prev]);
 
     return newQuestion;
   };
 
-  const addBankQuestion = (question) => {
+  const addBankQuestion = async (question) => {
+    const defaultJobId = question.jobId || jobDetails.jobId || 'JOB001';
+    try {
+      const res = await apiCreateQuestion(question, defaultJobId);
+      if (res.success && res.question) {
+        setQuestionBank((prev) => [res.question, ...prev.filter((q) => q.id !== res.question.id)]);
+        return res.question;
+      }
+    } catch (err) {
+      console.warn('API createQuestion fallback to local state:', err);
+    }
+
     const newQuestion = {
       id: `QB-${Date.now()}`,
       updatedAt: 'Updated just now',
-      assignedJobId: null,
+      assignedJobId: defaultJobId,
       ...question,
     };
-
     setQuestionBank((prev) => [newQuestion, ...prev]);
     return newQuestion;
   };
 
-  const updateBankQuestion = (questionId, updates) => {
+  const updateBankQuestion = async (questionId, updates) => {
+    const defaultJobId = updates.jobId || jobDetails.jobId || 'JOB001';
+    if (questionId && !String(questionId).startsWith('QB-')) {
+      try {
+        const res = await apiUpdateQuestion(questionId, updates, defaultJobId);
+        if (res.success && res.question) {
+          setQuestionBank((prev) =>
+            prev.map((row) => (row.id === questionId ? res.question : row))
+          );
+          return res.question;
+        }
+      } catch (err) {
+        console.warn('API updateQuestion fallback to local state:', err);
+      }
+    }
+
     setQuestionBank((prev) =>
       prev.map((row) =>
         row.id === questionId
@@ -234,9 +324,30 @@ export const JobRoleProvider = ({ children }) => {
     );
   };
 
-  const deleteBankQuestion = (questionId) => {
+  const deleteBankQuestion = async (questionId) => {
+    if (questionId && !String(questionId).startsWith('QB-')) {
+      try {
+        await apiDeleteQuestion(questionId);
+      } catch (err) {
+        console.warn('API deleteQuestion error:', err);
+      }
+    }
     setQuestionBank((prev) => prev.filter((row) => row.id !== questionId));
     setSelectedQuestionIds((prev) => prev.filter((id) => id !== questionId));
+  };
+
+  const saveQuestionsToBankApi = async (questionsToSave = []) => {
+    if (!questionsToSave.length) return { success: false, message: 'No questions to save' };
+    try {
+      const res = await apiCreateBulkQuestions(questionsToSave, jobDetails.jobId);
+      if (res.success) {
+        await fetchQuestionBankFromApi();
+        return res;
+      }
+    } catch (err) {
+      console.error('saveQuestionsToBankApi failed:', err);
+    }
+    return { success: false };
   };
 
   const updateGeneratedQuestion = (questionId, updates) => {
@@ -636,6 +747,9 @@ export const JobRoleProvider = ({ children }) => {
     toggleJobSkill,
     toggleCoverageItem,
     resetFilters,
+    bankLoading,
+    fetchQuestionBankFromApi,
+    saveQuestionsToBankApi,
   };
 
   return <JobRoleContext.Provider value={value}>{children}</JobRoleContext.Provider>;

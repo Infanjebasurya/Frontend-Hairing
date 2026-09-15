@@ -1,84 +1,90 @@
 // src/services/organizationService.js
+// Organizations API Service Suite with Axios
 
-const STORAGE_KEY = 'admin_organizations';
+import { apiClient } from './apiClient.js';
 
-// Get all organizations from localStorage
-export const getOrganizations = () => {
-  try {
-    const organizations = localStorage.getItem(STORAGE_KEY);
-    return organizations ? JSON.parse(organizations) : [];
-  } catch (error) {
-    console.error('Error getting organizations:', error);
-    return [];
-  }
+// Clean query parameters to avoid sending "undefined", "null", or empty strings
+const cleanQueryParams = (params = {}) => {
+  const cleaned = {};
+  Object.keys(params).forEach((key) => {
+    const val = params[key];
+    if (
+      val !== undefined &&
+      val !== null &&
+      val !== '' &&
+      val !== 'undefined' &&
+      val !== 'null' &&
+      val !== 'all'
+    ) {
+      cleaned[key] = val;
+    }
+  });
+  return cleaned;
 };
 
-// Save organizations to localStorage
-export const saveOrganizations = (organizations) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(organizations));
-    return true;
-  } catch (error) {
-    console.error('Error saving organizations:', error);
-    return false;
-  }
+/**
+ * 1. Create a new Organization
+ * Endpoint: POST /api/organizations
+ * @param {object} orgData (e.g. { name: "", contactEmail: "", plan: "" })
+ */
+export const createOrganization = async (orgData) => {
+  return await apiClient.post('/organizations', orgData);
 };
 
-// Add a new organization
-export const addOrganization = (organizationData) => {
-  const organizations = getOrganizations();
-  const newOrganization = {
-    id: Date.now(), // Simple ID generation
-    ...organizationData,
-    createdAt: new Date().toISOString()
-  };
-  organizations.push(newOrganization);
-  saveOrganizations(organizations);
-  return newOrganization;
+/**
+ * 2. Get All Organizations
+ * Endpoint: GET /api/organizations
+ * @param {object} params (e.g. { page: 1, limit: 10, search: "" })
+ */
+export const getOrganizations = async (params = {}) => {
+  const cleaned = cleanQueryParams(params);
+  return await apiClient.get('/organizations', { params: cleaned });
 };
 
-// Update organization
-export const updateOrganization = (organizationId, organizationData) => {
-  const organizations = getOrganizations();
-  const updatedOrganizations = organizations.map(org => 
-    org.id === organizationId ? { ...org, ...organizationData } : org
-  );
-  saveOrganizations(updatedOrganizations);
-  return updatedOrganizations.find(org => org.id === organizationId);
+/**
+ * 3. Get Single Organization by ID
+ * Endpoint: GET /api/organizations/:id
+ * @param {string} id
+ */
+export const getOrganization = async (id) => {
+  return await apiClient.get(`/organizations/${id}`);
 };
 
-// Delete organization
-export const deleteOrganization = (organizationId) => {
-  const organizations = getOrganizations();
-  const filteredOrganizations = organizations.filter(org => org.id !== organizationId);
-  saveOrganizations(filteredOrganizations);
-  return true;
+/**
+ * 4. Full Update Organization
+ * Endpoint: PUT /api/organizations/:id
+ * @param {string} id
+ * @param {object} orgData
+ */
+export const updateOrganization = async (id, orgData = {}) => {
+  return await apiClient.put(`/organizations/${id}`, orgData);
 };
 
-// Initialize with sample data if empty
-export const initializeOrganizations = () => {
-  const organizations = getOrganizations();
-  if (organizations.length === 0) {
-    const initialOrganizations = [
-      {
-        id: 1,
-        name: 'Tech Corp',
-        status: 'active',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 2,
-        name: 'Innovate LLC',
-        status: 'active',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: 3,
-        name: 'Global Solutions',
-        status: 'inactive',
-        createdAt: new Date().toISOString()
-      }
-    ];
-    saveOrganizations(initialOrganizations);
-  }
+/**
+ * 5. Partial Update Organization
+ * Endpoint: PATCH /api/organizations/:id
+ * @param {string} id
+ * @param {object} patchData
+ */
+export const patchOrganization = async (id, patchData = {}) => {
+  return await apiClient.patch(`/organizations/${id}`, patchData);
+};
+
+/**
+ * 6. Delete Organization
+ * Endpoint: DELETE /api/organizations/:id
+ * @param {string} id
+ */
+export const deleteOrganization = async (id) => {
+  return await apiClient.delete(`/organizations/${id}`);
+};
+
+/**
+ * 7. Get Organization Statistics / Summary
+ * Endpoint: GET /api/organizations/stats/summary
+ * @param {object} params
+ */
+export const getOrganizationStats = async (params = {}) => {
+  const cleaned = cleanQueryParams(params);
+  return await apiClient.get('/organizations/stats/summary', { params: cleaned });
 };

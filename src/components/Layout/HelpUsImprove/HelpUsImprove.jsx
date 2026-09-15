@@ -29,55 +29,117 @@ import {
   Category as CategoryIcon
 } from '@mui/icons-material';
 
-// Mock function to get user info
-const getUserInfo = () => {
-  return {
-    email: '',
-    organization: 'Tech Corp',
-    organizations: ['Tech Corp', 'Finance LLC', 'Education Inc']
-  };
-};
+import { useAuth } from '../../../contexts/AuthContext';
+import { createFeedback } from '../../../services/feedbackService';
+import { getOrganizations } from '../../../services/organizationService';
 
 const HelpUsImprove = ({ open, onClose, darkMode = false }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     feedback: '',
     organization: '',
+    orgId: '',
     email: '',
-    category: 'general'
+    category: 'General Feedback'
   });
+  const [organizationsList, setOrganizationsList] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
-  const [userInfo, setUserInfo] = useState(null);
 
   const feedbackCategories = [
-    { value: 'general', label: 'General Feedback', color: '#2196f3' },
-    { value: 'bug', label: 'Bug Report', color: '#f44336' },
-    { value: 'feature', label: 'Feature Request', color: '#4caf50' },
-    { value: 'ui', label: 'UI/UX Improvement', color: '#ff9800' },
-    { value: 'performance', label: 'Performance Issue', color: '#9c27b0' },
-    { value: 'security', label: 'Security Concern', color: '#e91e63' },
-    { value: 'other', label: 'Other', color: '#607d8b' }
+    { value: 'General Feedback', label: 'General Feedback', color: '#2196f3' },
+    { value: 'Bug Report', label: 'Bug Report', color: '#f44336' },
+    { value: 'Feature Request', label: 'Feature Request', color: '#4caf50' },
+    { value: 'UI/UX Improvement', label: 'UI/UX Improvement', color: '#ff9800' },
+    { value: 'Performance Issue', label: 'Performance Issue', color: '#9c27b0' },
+    { value: 'Security Concern', label: 'Security Concern', color: '#e91e63' },
+    { value: 'Other', label: 'Other', color: '#607d8b' }
   ];
 
   useEffect(() => {
     if (open) {
-      const user = getUserInfo();
-      setUserInfo(user);
-      setFormData({
-        feedback: '',
-        organization: user.organization || '',
-        email: user.email || '',
-        category: 'general'
-      });
-      setSubmitStatus(null);
+      loadOrgsAndUser();
     }
-  }, [open]);
+  }, [open, user]);
+
+  const loadOrgsAndUser = async () => {
+    let orgs = [];
+    try {
+      const orgsRes = await getOrganizations();
+      if (orgsRes.success && orgsRes.data) {
+        const payloadData = orgsRes.data.data || orgsRes.data;
+        const rawOrgs = Array.isArray(payloadData?.organizations)
+          ? payloadData.organizations
+          : Array.isArray(orgsRes.data?.organizations)
+          ? orgsRes.data.organizations
+          : Array.isArray(payloadData?.items)
+          ? payloadData.items
+          : Array.isArray(payloadData)
+          ? payloadData
+          : Array.isArray(orgsRes.data)
+          ? orgsRes.data
+          : [];
+        orgs = rawOrgs.map(o => ({
+          id: o._id || o.id,
+          name: o.companyName || o.name || 'Organization'
+        }));
+      }
+    } catch (e) {
+      console.warn('Orgs fetch error in HelpUsImprove:', e);
+    }
+
+    try {
+      const storedCreated = localStorage.getItem('created_orgs');
+      if (storedCreated) {
+        const parsed = JSON.parse(storedCreated);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(o => {
+            const id = o._id || o.id;
+            if (id && !orgs.some(item => item.id === id)) {
+              orgs.unshift({ id, name: o.companyName || o.name || 'Organization' });
+            }
+          });
+        }
+      }
+    } catch (e) {}
+
+    if (orgs.length === 0) {
+      orgs = [
+        { id: '6a0b4d7398ed27126dfd78ff', name: 'Aroha' },
+        { id: '6a98864954481f4c048733c1', name: 'Healthcare Systems' }
+      ];
+    }
+    setOrganizationsList(orgs);
+
+    const userEmail = user?.companyEmail || user?.email || '';
+    const userOrgId = user?.organizationId?._id || (typeof user?.organizationId === 'string' ? user?.organizationId : '') || (orgs[0]?.id || '6a0b4d7398ed27126dfd78ff');
+    const matchedOrg = orgs.find(o => o.id === userOrgId);
+
+    setFormData({
+      feedback: '',
+      organization: matchedOrg ? matchedOrg.name : (user?.organizationName || orgs[0]?.name || 'Organization'),
+      orgId: userOrgId,
+      email: userEmail,
+      category: 'General Feedback'
+    });
+    setSubmitStatus(null);
+  };
 
   const handleInputChange = (field) => (event) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: event.target.value
-    }));
+    const val = event.target.value;
+    if (field === 'organization') {
+      const found = organizationsList.find(o => o.name === val || o.id === val);
+      setFormData(prev => ({
+        ...prev,
+        organization: found ? found.name : val,
+        orgId: found ? found.id : (prev.orgId || '6a0b4d7398ed27126dfd78ff')
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [field]: val
+      }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -108,31 +170,40 @@ const HelpUsImprove = ({ open, onClose, darkMode = false }) => {
     setSubmitStatus(null);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const payload = {
+        orgId: formData.orgId || '6a0b4d7398ed27126dfd78ff',
+        feedbackCategory: formData.category || 'General Feedback',
+        feedbackText: formData.feedback.trim(),
+        feedbackStatus: 'NEW',
+        isHighlighted: false,
+        orgUserEmail: formData.email.trim()
+      };
+
+      const res = await createFeedback(payload);
+      if (res.error && !res.success) {
+        throw new Error(res.error);
+      }
       
       setSubmitStatus({ 
         type: 'success', 
         message: 'Thank you for your feedback! We appreciate your input and will review it soon.' 
       });
       
-      setFormData({
-        feedback: '',
-        organization: userInfo?.organization || '',
-        email: userInfo?.email || '',
-        category: 'general'
-      });
+      setFormData(prev => ({
+        ...prev,
+        feedback: ''
+      }));
       
       setTimeout(() => {
         onClose();
         setSubmitStatus(null);
-      }, 2500);
+      }, 2000);
       
     } catch (error) {
       console.error('Error submitting feedback:', error);
       setSubmitStatus({ 
         type: 'error', 
-        message: 'Failed to submit feedback. Please try again.' 
+        message: error.message || 'Failed to submit feedback. Please try again.' 
       });
     } finally {
       setIsSubmitting(false);
@@ -303,21 +374,14 @@ const HelpUsImprove = ({ open, onClose, darkMode = false }) => {
                     }
                   }}
                 >
-                  {userInfo?.organizations?.map((org) => (
-                    <MenuItem key={org} value={org}>
+                  {organizationsList.map((org) => (
+                    <MenuItem key={org.id || org.name} value={org.name}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <BusinessIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-                        {org}
+                        {org.name}
                       </Box>
                     </MenuItem>
                   ))}
-                  <Divider sx={{ my: 0.5 }} />
-                  <MenuItem value="other">
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <BusinessIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-                      Other Organization
-                    </Box>
-                  </MenuItem>
                 </Select>
               </FormControl>
 

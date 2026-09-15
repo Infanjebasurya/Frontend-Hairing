@@ -17,16 +17,18 @@ const ProgressBar = ({ used = 0, total = 1, label = '', messages = '' }) => {
         >
           {label}
         </Typography>
-        <Typography 
-          variant="body2" 
-          sx={{ 
-            fontSize: '0.75rem',
-            color: 'text.secondary',
-            fontWeight: '500'
-          }}
-        >
-          {messages}
-        </Typography>
+        {messages ? (
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              fontSize: '0.75rem',
+              color: 'text.secondary',
+              fontWeight: '500'
+            }}
+          >
+            {messages}
+          </Typography>
+        ) : null}
       </Box>
       <LinearProgress
         variant="determinate"

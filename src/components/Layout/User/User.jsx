@@ -54,6 +54,7 @@ import {
 } from '@mui/icons-material';
 import AddUser from '../Adduser/Adduser';
 import { deleteUser, getUsers, initializeUsers, updateUser } from '../../../services/userService';
+import { getOrgUsers, deleteOrgUser, updateOrgUser } from '../../../services/orgUserService';
 
 const User = ({ darkMode }) => {
   const theme = useTheme();
@@ -89,14 +90,35 @@ const User = ({ darkMode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users, searchTerm]);
 
-  const loadUsers = () => {
+  const loadUsers = async () => {
     setLoading(true);
     try {
+      const res = await getOrgUsers({
+        organizationId: import.meta.env?.VITE_ORGANIZATION_ID || '6a0b4d7398ed27126dfd78ff'
+      });
+      if (res.success && res.data) {
+        const rawList = Array.isArray(res.data.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
+        if (rawList.length > 0) {
+          const mappedUsers = rawList.map((u, i) => ({
+            id: u._id || u.id || `user-${i}`,
+            _id: u._id || u.id,
+            name: u.fullName || u.name || 'User',
+            email: u.companyEmail || u.email || '',
+            role: u.role || 'INTERVIEWER',
+            currentRole: u.currentRole || 'Software Engineer',
+            status: (u.status || 'ACTIVE').toLowerCase(),
+            createdAt: u.createdAt || new Date().toISOString(),
+          }));
+          setUsers(mappedUsers);
+          return;
+        }
+      }
+
       initializeUsers();
       setUsers(getUsers());
     } catch (error) {
       console.error('Error loading users:', error);
-      showSnackbar('Error loading users', 'error');
+      setUsers(getUsers());
     } finally {
       setLoading(false);
     }

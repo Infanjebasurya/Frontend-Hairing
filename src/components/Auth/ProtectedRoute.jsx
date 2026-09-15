@@ -22,11 +22,6 @@ const ProtectedRoute = ({ children, requireUser = false }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If route requires regular user but admin is logged in
-  if (requireUser && isAdmin) {
-    return <Navigate to="/admin" replace />;
-  }
-
   return children;
 };
 

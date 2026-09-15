@@ -1,7 +1,6 @@
 import React from 'react';
 import { Box, Breadcrumbs, Button, Divider, Link, Stack, Typography } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import PlaylistAddCheckCircleIcon from '@mui/icons-material/PlaylistAddCheckCircle';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useJobRole } from '../useJobRole';
@@ -15,11 +14,13 @@ const steps = [
   { label: 'Review', path: '/job-role/review' },
 ];
 
-const QuestionsGenerationLayout = ({ title, subtitle, children, actions }) => {
+const QuestionsGenerationLayout = ({ title, subtitle, children, actions, showReviewFlow }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { jobDetails } = useJobRole();
   const activeStep = steps.find((step) => step.path === location.pathname);
+  const isQuestionBankRoute = location.pathname === '/question-bank';
+  const shouldShowReviewFlow = showReviewFlow !== undefined ? showReviewFlow : !isQuestionBankRoute;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -35,18 +36,20 @@ const QuestionsGenerationLayout = ({ title, subtitle, children, actions }) => {
           >
             Home
           </Link>
-          <Link
-            component="button"
-            type="button"
-            underline="hover"
-            color="inherit"
-            onClick={() => navigate('/job-role')}
-            sx={{ fontSize: '0.875rem' }}
-          >
-            Questions Generation
-          </Link>
+          {location.pathname !== '/question-bank' ? (
+            <Link
+              component="button"
+              type="button"
+              underline="hover"
+              color="inherit"
+              onClick={() => navigate('/job-role/settings')}
+              sx={{ fontSize: '0.875rem' }}
+            >
+              Question Generation
+            </Link>
+          ) : null}
           <Typography color="text.primary" sx={{ fontSize: '0.875rem', fontWeight: 600 }}>
-            {activeStep?.label || title}
+            {location.pathname === '/question-bank' ? 'Question Bank' : (activeStep?.label || title)}
           </Typography>
         </Breadcrumbs>
 
@@ -64,19 +67,20 @@ const QuestionsGenerationLayout = ({ title, subtitle, children, actions }) => {
               {subtitle}
             </Typography>
           </Box>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-            {actions}
-            <Button variant="outlined" startIcon={<PlaylistAddCheckCircleIcon />} onClick={() => navigate('/job-role/question-bank')}>
-              Question Bank
-            </Button>
-            <Button variant="contained" startIcon={<AutoAwesomeIcon />} onClick={() => navigate('/job-role/review')}>
-              Review Flow
-            </Button>
-          </Stack>
+          {(actions || shouldShowReviewFlow) && (
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              {actions}
+              {shouldShowReviewFlow && (
+                <Button variant="contained" startIcon={<AutoAwesomeIcon />} onClick={() => navigate('/job-role/review')}>
+                  Review Flow
+                </Button>
+              )}
+            </Stack>
+          )}
         </Stack>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between">
           <Typography variant="body2" color="text.secondary">
-            Job ID: {jobDetails.jobId} | Experience: {jobDetails.experienceYears}y {jobDetails.experienceMonths}m | Output: {jobDetails.outputFormat}
+            Job ID: {jobDetails.jobId} | Experience: {jobDetails.experienceYears}y {jobDetails.experienceMonths}m
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {activeStep?.label || title}

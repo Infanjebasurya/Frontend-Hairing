@@ -94,6 +94,12 @@ const QuestionSettingsPage = () => {
     newSetMode === 'automatic' ? 'Automatic' : newSetMode === 'resume' ? 'By Resume' : 'Manual';
 
   useEffect(() => {
+    if (questionSource !== 'new_set') {
+      setQuestionSource('new_set');
+    }
+  }, []);
+
+  useEffect(() => {
     if (!isResumePickerOpen) return;
 
     try {
@@ -732,17 +738,14 @@ const QuestionSettingsPage = () => {
               </Stack>
 
               <Grid container spacing={1.5}>
-                <Grid item xs={6}>
+                <Grid item xs={4}>
                   <InfoTile label="Experience" value={`${jobDetails.experienceYears}y ${jobDetails.experienceMonths}m`} />
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={4}>
                   <InfoTile label="Total Questions" value={jobDetails.totalQuestions} />
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={4}>
                   <InfoTile label="Selected Skills" value={selectedSkillCount} />
-                </Grid>
-                <Grid item xs={6}>
-                  <InfoTile label="Output" value={jobDetails.outputFormat} />
                 </Grid>
               </Grid>
 
@@ -770,7 +773,15 @@ const QuestionSettingsPage = () => {
                   exclusive
                   fullWidth
                   value={questionSource}
-                  onChange={(_, value) => value && setQuestionSource(value)}
+                  onChange={(_, value) => {
+                    if (value === 'bank') {
+                      navigate('/job-role/question-bank');
+                      return;
+                    }
+                    if (value) {
+                      setQuestionSource(value);
+                    }
+                  }}
                   sx={{
                     p: 0.5,
                     border: '1px solid',
@@ -1294,12 +1305,6 @@ const QuestionSettingsPage = () => {
                       Select or remove the skills you want this question set to emphasize.
                     </Typography>
                   </Box>
-                  <TextField
-                    label="Output Format"
-                    value={jobDetails.outputFormat}
-                    InputProps={{ readOnly: true }}
-                    sx={{ width: { xs: '100%', md: 180 } }}
-                  />
                 </Stack>
 
                 <Divider />
@@ -1408,7 +1413,7 @@ const QuestionSettingsPage = () => {
                         {selectedRequirement.title}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Enable or disable requirement rules for this question type. These settings are used in the generated workflow and final JSON output.
+                        Enable or disable requirement rules for this question type. These settings are used in the generated workflow and question outputs.
                       </Typography>
                     </Box>
 

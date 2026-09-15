@@ -65,146 +65,235 @@ import {
   Close as CloseIcon,
   Group as GroupIcon,
   Person as PersonIcon,
+  Restore as RestoreIcon,
+  AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
 import AppLoader from '../../Common/AppLoader';
+import {
+  getJobInterviews as apiGetJobInterviews,
+  getJobInterviewStats as apiGetJobInterviewStats,
+  deleteJobInterview as apiDeleteJobInterview,
+  restoreJobInterview as apiRestoreJobInterview,
+  exportJobInterviewsCsv as apiExportCsv,
+} from '../../../services/jobInterviewService';
 
-// Enhanced API service with better pagination and self/others filtering
+// Integrated API service with real backend endpoints and resilient fallback
 const jobInterviewsApi = {
   getJobInterviews: async (params = {}) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    let data = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
-    
-    // Add some mock data if empty - enhanced with self/others data
-    if (data.length === 0) {
-      const mockData = Array.from({ length: 20 }, (_, i) => {
-        const hasSelfInterviews = Math.random() > 0.5;
-        const interviewRounds = Array.from({ length: Math.floor(Math.random() * 5) + 1 }, (_, j) => {
-          const isSelfAssigned = hasSelfInterviews && (j === 0 || Math.random() > 0.7); // First round or random
+    try {
+      const pageIndex = typeof params.page === 'number' ? params.page : 0;
+      const limit = params.limit || 10;
+
+      const queryPayload = {
+        organizationId: import.meta.env?.VITE_ORGANIZATION_ID || '6a0b4d7398ed27126dfd78ff',
+        page: pageIndex + 1,
+        limit,
+      };
+
+      if (params.search && params.search.trim()) {
+        queryPayload.search = params.search.trim();
+      }
+      if (params.statusFilter && params.statusFilter !== 'all') {
+        queryPayload.status = params.statusFilter;
+      }
+      if (params.sortBy) {
+        queryPayload.sortBy = params.sortBy;
+        queryPayload.sortOrder = params.sortOrder || 'asc';
+      }
+
+      const res = await apiGetJobInterviews(queryPayload);
+
+      if (res.success && res.data) {
+        const payloadData = res.data.data || res.data;
+        const rawList = Array.isArray(payloadData?.jobInterviews)
+          ? payloadData.jobInterviews
+          : Array.isArray(payloadData)
+          ? payloadData
+          : Array.isArray(res.data)
+          ? res.data
+          : Array.isArray(payloadData?.items)
+          ? payloadData.items
+          : [];
+
+        if (rawList.length > 0) {
+          const normalized = rawList.map((item, idx) => {
+            const rounds = Array.isArray(item.interviewRounds) ? item.interviewRounds : [];
+            const hasSelfAssignedRounds = Boolean(item.hasSelfAssignedRounds || rounds.some((r) => r.isSelfAssigned));
+            return {
+              id: item._id || item.id || idx + 1,
+              _id: item._id || item.id,
+              jobId: item.jobId || `JOB${String(idx + 1).padStart(3, '0')}`,
+              jobTitle: item.jobTitle || 'Job Role',
+              jdLink: item.jdLink || '',
+              interviewRounds: rounds,
+              rounds: rounds.length || item.rounds || 1,
+              status: item.status || 'In progress',
+              candidates: typeof item.candidates === 'number' ? item.candidates : (Array.isArray(item.assignedCandidates) ? item.assignedCandidates.length : 0),
+              createdAt: item.createdAt || new Date().toISOString(),
+              team: Array.isArray(item.team) ? item.team : ['HR'],
+              hasSelfAssignedRounds,
+              isDeleted: Boolean(item.isDeleted),
+            };
+          });
+
+          // Sync back to localStorage for smooth offline access
+          localStorage.setItem('jobInterviews', JSON.stringify(normalized));
+
+          const pagination = payloadData?.pagination || {};
+          const total = pagination.total || normalized.length;
+          const totalPages = pagination.totalPages || Math.ceil(total / limit);
+
           return {
-            id: Date.now() + j,
-            name: `Round ${j + 1}`,
-            interviewer: isSelfAssigned 
-              ? 'Rajesh R (rajesh@company.com)' 
-              : ['John Doe (john@company.com)', 'Jane Smith (jane@company.com)', 'Bob Johnson (bob@company.com)'][Math.floor(Math.random() * 3)],
-            isSelfAssigned: isSelfAssigned,
+            data: normalized,
+            total,
+            page: pageIndex,
+            limit,
+            totalPages,
           };
-        });
-        
-        // Check if any round is self assigned for filtering
-        const hasSelfAssignedRounds = interviewRounds.some(round => round.isSelfAssigned);
-        
+        }
+      }
+    } catch (e) {
+      console.warn('[jobInterviewsApi] Remote fetch fallback to local cache:', e);
+    }
+
+    // Fallback to cached/mock data if API returns empty
+    let data = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
+    if (data.length === 0) {
+      const mockData = Array.from({ length: 10 }, (_, i) => {
+        const hasSelfInterviews = Math.random() > 0.5;
+        const interviewRounds = Array.from({ length: Math.floor(Math.random() * 3) + 1 }, (_, j) => ({
+          id: Date.now() + j,
+          name: `Round ${j + 1}`,
+          interviewer: 'Rajesh R (rajesh@company.com)',
+          isSelfAssigned: hasSelfInterviews && j === 0,
+        }));
+
         return {
           id: i + 1,
           jobId: `JOB${String(i + 1).padStart(3, '0')}`,
-          jdLink: `http://company.com/jd/${i + 1}`,
-          interviewRounds: interviewRounds,
+          jobTitle: ['QA Junior Job Role', 'Fullstack Engineer', 'Product Designer', 'Backend Dev'][i % 4],
+          jdLink: `https://company.com/jd/${i + 1}`,
+          interviewRounds,
           rounds: interviewRounds.length,
-          status: ['In progress', 'Done', 'Pending'][Math.floor(Math.random() * 3)],
-          candidates: Math.floor(Math.random() * 50),
-          createdAt: new Date(Date.now() - Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000).toISOString(),
-          team: ['JD', 'MJ', 'AR'].slice(0, Math.floor(Math.random() * 3) + 1),
-          hasSelfAssignedRounds: hasSelfAssignedRounds,
+          status: ['In progress', 'Done', 'Pending'][i % 3],
+          candidates: Math.floor(Math.random() * 20),
+          createdAt: new Date().toISOString(),
+          team: ['HR', 'Tech'],
+          hasSelfAssignedRounds: hasSelfInterviews,
         };
       });
       localStorage.setItem('jobInterviews', JSON.stringify(mockData));
       data = mockData;
     }
 
-    // Apply filtering based on params
     let filteredData = [...data];
-    
     if (params.search) {
       const searchTerm = params.search.toLowerCase();
-      filteredData = filteredData.filter(row =>
-        row.jobId.toLowerCase().includes(searchTerm) ||
-        row.jdLink.toLowerCase().includes(searchTerm) ||
-        row.status.toLowerCase().includes(searchTerm)
+      filteredData = filteredData.filter(
+        (row) =>
+          (row.jobId && row.jobId.toLowerCase().includes(searchTerm)) ||
+          (row.jobTitle && row.jobTitle.toLowerCase().includes(searchTerm)) ||
+          (row.jdLink && row.jdLink.toLowerCase().includes(searchTerm))
       );
     }
 
     if (params.statusFilter && params.statusFilter !== 'all') {
-      filteredData = filteredData.filter(row => row.status === params.statusFilter);
+      filteredData = filteredData.filter((row) => row.status === params.statusFilter);
     }
 
-    // NEW: Apply self/others filter
     if (params.interviewerFilter && params.interviewerFilter !== 'all') {
       if (params.interviewerFilter === 'self') {
-        filteredData = filteredData.filter(row => row.hasSelfAssignedRounds === true);
+        filteredData = filteredData.filter((row) => row.hasSelfAssignedRounds === true);
       } else if (params.interviewerFilter === 'others') {
-        filteredData = filteredData.filter(row => row.hasSelfAssignedRounds === false);
+        filteredData = filteredData.filter((row) => row.hasSelfAssignedRounds === false);
       }
     }
 
-    // Apply sorting
-    if (params.sortBy) {
-      filteredData.sort((a, b) => {
-        const aValue = a[params.sortBy];
-        const bValue = b[params.sortBy];
-        
-        if (params.sortOrder === 'desc') {
-          return aValue < bValue ? 1 : -1;
-        }
-        return aValue > bValue ? 1 : -1;
-      });
-    }
-
-    // Get total count for pagination
     const total = filteredData.length;
-    
-    // Apply pagination
-    const startIndex = (params.page || 0) * (params.limit || 10);
-    const endIndex = startIndex + (params.limit || 10);
-    const paginatedData = filteredData.slice(startIndex, endIndex);
+    const limit = params.limit || 10;
+    const page = params.page || 0;
+    const paginatedData = filteredData.slice(page * limit, (page + 1) * limit);
 
     return {
       data: paginatedData,
       total,
-      page: params.page || 0,
-      limit: params.limit || 10,
-      totalPages: Math.ceil(total / (params.limit || 10)),
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
   },
 
   getStatistics: async (interviewerFilter = '') => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    const data = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
-    
-    // Filter by interviewer type if specified
-    let filteredData = data;
-    if (interviewerFilter) {
-      if (interviewerFilter === 'self') {
-        filteredData = data.filter(item => item.hasSelfAssignedRounds === true);
-      } else if (interviewerFilter === 'others') {
-        filteredData = data.filter(item => item.hasSelfAssignedRounds === false);
+    try {
+      const res = await apiGetJobInterviewStats({
+        organizationId: import.meta.env?.VITE_ORGANIZATION_ID || '6a0b4d7398ed27126dfd78ff',
+      });
+      if (res.success && res.data) {
+        const statsPayload = res.data.data || res.data;
+        if (statsPayload && typeof statsPayload === 'object') {
+          return {
+            totalInterviews: statsPayload.totalInterviews ?? 0,
+            inProgress: statsPayload.inProgress ?? 0,
+            completed: statsPayload.completed ?? 0,
+            pending: statsPayload.pending ?? 0,
+            averageRounds: statsPayload.averageRounds ?? 0,
+            totalCandidates: statsPayload.totalCandidates ?? 0,
+            selfAssigned: statsPayload.selfAssigned ?? 0,
+            othersAssigned: statsPayload.othersAssigned ?? 0,
+          };
+        }
       }
+    } catch (e) {
+      // fallback
     }
-    
+
+    const data = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
+    let filteredData = data;
+    if (interviewerFilter === 'self') {
+      filteredData = data.filter((item) => item.hasSelfAssignedRounds === true);
+    } else if (interviewerFilter === 'others') {
+      filteredData = data.filter((item) => item.hasSelfAssignedRounds === false);
+    }
+
     return {
       totalInterviews: filteredData.length,
-      inProgress: filteredData.filter(item => item.status === 'In progress').length,
-      completed: filteredData.filter(item => item.status === 'Done').length,
-      pending: filteredData.filter(item => item.status === 'Pending').length,
-      averageRounds: filteredData.length > 0 
-        ? (filteredData.reduce((sum, item) => sum + item.rounds, 0) / filteredData.length).toFixed(1)
+      inProgress: filteredData.filter((item) => item.status === 'In progress').length,
+      completed: filteredData.filter((item) => item.status === 'Done').length,
+      pending: filteredData.filter((item) => item.status === 'Pending').length,
+      averageRounds: filteredData.length > 0
+        ? (filteredData.reduce((sum, item) => sum + (item.rounds || 1), 0) / filteredData.length).toFixed(1)
         : 0,
-      totalCandidates: filteredData.reduce((sum, item) => sum + item.candidates, 0),
-      selfAssigned: data.filter(item => item.hasSelfAssignedRounds === true).length,
-      othersAssigned: data.filter(item => item.hasSelfAssignedRounds === false).length,
+      totalCandidates: filteredData.reduce((sum, item) => sum + (item.candidates || 0), 0),
+      selfAssigned: data.filter((item) => item.hasSelfAssignedRounds === true).length,
+      othersAssigned: data.filter((item) => item.hasSelfAssignedRounds === false).length,
     };
   },
 
   deleteJobInterview: async (id) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
+    try {
+      await apiDeleteJobInterview(id);
+    } catch (e) {
+      console.warn('[jobInterviewsApi] Remote delete fallback:', e);
+    }
+
     const data = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
-    const updatedData = data.filter(item => item.id !== id);
+    const updatedData = data.filter((item) => item.id !== id && item._id !== id);
     localStorage.setItem('jobInterviews', JSON.stringify(updatedData));
-    
+
     return { success: true, message: 'Job interview deleted successfully' };
   },
+
+  restoreJobInterview: async (id) => {
+    try {
+      const res = await apiRestoreJobInterview(id);
+      return res;
+    } catch (e) {
+      console.warn('[jobInterviewsApi] Remote restore error:', e);
+      return { success: false, error: e.message };
+    }
+  },
 };
+
 
 const JobInterviews = () => {
   const theme = useTheme();
@@ -289,37 +378,15 @@ const JobInterviews = () => {
     }
   }, [interviewerFilter]); // UPDATED: Added interviewerFilter dependency
 
-  // Initial data fetch
+  // Fetch interviews whenever parameters change
   useEffect(() => {
     fetchJobInterviews();
+  }, [fetchJobInterviews]);
+
+  // Fetch statistics whenever interviewer filter changes
+  useEffect(() => {
     fetchStatistics();
-  }, [fetchJobInterviews, fetchStatistics]);
-
-  // Handle search with debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setPage(0);
-      fetchJobInterviews();
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [searchTerm, fetchJobInterviews]);
-
-  // Handle page change
-  useEffect(() => {
-    fetchJobInterviews();
-  }, [page, rowsPerPage, fetchJobInterviews]);
-
-  // Handle sort change
-  useEffect(() => {
-    fetchJobInterviews();
-  }, [sortConfig, fetchJobInterviews]);
-
-  // Handle filter changes
-  useEffect(() => {
-    setPage(0);
-    fetchJobInterviews();
-  }, [statusFilter, interviewerFilter, fetchJobInterviews]); // UPDATED: Added interviewerFilter
+  }, [fetchStatistics]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -477,7 +544,38 @@ const JobInterviews = () => {
     handleActionClose();
   };
 
-  const handleExport = () => {
+  const handleQuestionGeneration = () => {
+    if (selectedRow) {
+      navigate('/job-role/settings', {
+        state: {
+          jobData: selectedRow
+        }
+      });
+    } else {
+      navigate('/job-role/settings');
+    }
+    handleActionClose();
+  };
+
+  const handleExport = async () => {
+    try {
+      const res = await apiExportCsv({
+        organizationId: import.meta.env?.VITE_ORGANIZATION_ID || '6a0b4d7398ed27126dfd78ff',
+      }, `job_interviews_${new Date().toISOString().split('T')[0]}.csv`);
+
+      if (res.success) {
+        setSnackbar({
+          open: true,
+          message: 'Exported CSV successfully from server',
+          severity: 'success',
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn('[JobInterview] Backend CSV export fallback to client-side CSV:', e);
+    }
+
+    // Client-side fallback
     const data = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
     const csvContent = convertToCSV(data);
     downloadCSV(csvContent, `job_interviews_${new Date().toISOString().split('T')[0]}.csv`);
@@ -489,16 +587,44 @@ const JobInterviews = () => {
     });
   };
 
+  const handleRestoreJob = async (rowToRestore) => {
+    const target = rowToRestore || selectedRow;
+    if (!target) return;
+    try {
+      const res = await jobInterviewsApi.restoreJobInterview(target.id || target._id);
+      if (res.success) {
+        fetchJobInterviews();
+        fetchStatistics();
+        setSnackbar({
+          open: true,
+          message: `Job interview "${target.jobId}" restored successfully!`,
+          severity: 'success'
+        });
+      } else {
+        throw new Error(res.error || 'Failed to restore job interview');
+      }
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message: err.message || 'Failed to restore job interview',
+        severity: 'error'
+      });
+    } finally {
+      handleActionClose();
+    }
+  };
+
   const convertToCSV = (data) => {
-    const headers = ['Job ID', 'JD Link', 'Rounds', 'Status', 'Candidates', 'Created At', 'Team', 'Has Self Assigned'];
+    const headers = ['Job ID', 'Job Title', 'JD Link', 'Rounds', 'Status', 'Candidates', 'Created At', 'Team', 'Has Self Assigned'];
     const rows = data.map(item => [
       item.jobId,
+      item.jobTitle || 'Job Role',
       item.jdLink,
       item.rounds,
       item.status,
       item.candidates,
       new Date(item.createdAt).toLocaleDateString(),
-      item.team.join(', '),
+      Array.isArray(item.team) ? item.team.join(', ') : 'HR',
       item.hasSelfAssignedRounds ? 'Yes' : 'No'
     ]);
     
@@ -578,39 +704,45 @@ const JobInterviews = () => {
   };
 
   // Enhanced Statistics Cards - Mobile friendly
+  const totalInt = statistics?.totalInterviews ?? 0;
+  const selfInt = statistics?.selfAssigned ?? 0;
+  const othersInt = statistics?.othersAssigned ?? 0;
+  const pendingInt = statistics?.pending ?? 0;
+  const avgRounds = statistics?.averageRounds ?? 0;
+  const totalCand = statistics?.totalCandidates ?? 0;
+  const sumAssigned = selfInt + othersInt;
+
   const stats = statistics ? [
     { 
       label: 'Total Interviews', 
-      value: statistics.totalInterviews.toString(), 
-      subLabel: `${statistics.averageRounds} avg rounds`,
+      value: String(totalInt), 
+      subLabel: `${avgRounds} avg rounds`,
       color: theme.palette.text.primary,
       progress: 100,
       icon: <WorkIcon />,
     },
     { 
       label: 'Self Assigned', 
-      value: statistics.selfAssigned.toString(), 
-      subLabel: `${((statistics.selfAssigned / (statistics.selfAssigned + statistics.othersAssigned)) * 100).toFixed(1)}% of total`,
+      value: String(selfInt), 
+      subLabel: `${sumAssigned > 0 ? ((selfInt / sumAssigned) * 100).toFixed(1) : 0}% of total`,
       color: theme.palette.success.main,
-      progress: statistics.selfAssigned + statistics.othersAssigned > 0 ? 
-        (statistics.selfAssigned / (statistics.selfAssigned + statistics.othersAssigned)) * 100 : 0,
+      progress: sumAssigned > 0 ? (selfInt / sumAssigned) * 100 : 0,
       icon: <PersonIcon />,
     },
     { 
       label: 'Others Assigned', 
-      value: statistics.othersAssigned.toString(), 
-      subLabel: `${statistics.totalCandidates} candidates`,
+      value: String(othersInt), 
+      subLabel: `${totalCand} candidates`,
       color: theme.palette.info.main,
-      progress: statistics.selfAssigned + statistics.othersAssigned > 0 ? 
-        (statistics.othersAssigned / (statistics.selfAssigned + statistics.othersAssigned)) * 100 : 0,
+      progress: sumAssigned > 0 ? (othersInt / sumAssigned) * 100 : 0,
       icon: <GroupIcon />,
     },
     { 
       label: 'Pending', 
-      value: statistics.pending.toString(), 
+      value: String(pendingInt), 
       subLabel: 'Awaiting action',
       color: theme.palette.warning.dark,
-      progress: statistics.totalInterviews > 0 ? (statistics.pending / statistics.totalInterviews) * 100 : 0,
+      progress: totalInt > 0 ? (pendingInt / totalInt) * 100 : 0,
       icon: <PendingIcon />,
     },
   ] : [];
@@ -1612,9 +1744,14 @@ const JobInterviews = () => {
                           }}
                         >
                           <TableCell>
-                            <Typography variant="body2" fontWeight="600" color="primary">
+                            <Typography variant="body2" fontWeight="700" color="primary">
                               {row.jobId}
                             </Typography>
+                            {row.jobTitle && (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 500 }}>
+                                {row.jobTitle}
+                              </Typography>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1929,6 +2066,21 @@ const JobInterviews = () => {
         >
           <PersonAddIcon fontSize="small" sx={{ mr: 2, color: 'text.secondary' }} />
           Add Candidate
+        </MenuItem>
+        <MenuItem 
+          onClick={handleQuestionGeneration} 
+          sx={{ 
+            borderRadius: 1, 
+            mx: 1, 
+            my: 0.5,
+            color: 'text.primary',
+            '&:hover': {
+              bgcolor: subtleHoverBg,
+            }
+          }}
+        >
+          <AutoAwesomeIcon fontSize="small" sx={{ mr: 2, color: 'text.secondary' }} />
+          Question Generation
         </MenuItem>
         <MenuItem 
           onClick={() => {

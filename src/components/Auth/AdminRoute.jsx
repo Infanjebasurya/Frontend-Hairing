@@ -24,21 +24,7 @@ const AdminRoute = ({ children }) => {
   }
 
   if (!isAdmin) {
-    return (
-      <Box 
-        sx={{ 
-          minHeight: '100vh', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          p: 3
-        }}
-      >
-        <Alert severity="error" sx={{ maxWidth: 400 }}>
-          Access denied. Admin privileges required.
-        </Alert>
-      </Box>
-    );
+    return <Navigate to="/" replace />;
   }
 
   return children;

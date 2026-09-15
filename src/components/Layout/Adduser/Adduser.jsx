@@ -17,15 +17,19 @@ import {
   Snackbar
 } from '@mui/material';
 import { ArrowBack, Save, Person, Email, Security } from '@mui/icons-material';
-import { addUser } from '../../../services/userService'; // Fixed import name
+import { addUser } from '../../../services/userService';
+import { createOrgUser } from '../../../services/orgUserService';
 
-const AddUser = ({ darkMode, onSave, onCancel }) => { // Fixed component name
+const AddUser = ({ darkMode, onSave, onCancel }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: ''
+    role: 'INTERVIEWER',
+    currentRole: 'Software Engineer',
+    phone: '',
+    password: 'User@123',
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -57,12 +61,30 @@ const AddUser = ({ darkMode, onSave, onCancel }) => { // Fixed component name
     if (validateForm()) {
       setLoading(true);
       try {
-        // Save user to localStorage - fixed function name
+        // 1. Call Backend API POST /api/org-users
+        const apiPayload = {
+          organizationId: import.meta.env?.VITE_ORGANIZATION_ID || '6a0b4d7398ed27126dfd78ff',
+          fullName: formData.name.trim(),
+          companyEmail: formData.email.trim(),
+          password: formData.password || 'User@123',
+          confirmPassword: formData.password || 'User@123',
+          phone: formData.phone || '',
+          role: formData.role || 'INTERVIEWER',
+          currentRole: formData.currentRole || 'Software Engineer',
+        };
+
+        const res = await createOrgUser(apiPayload);
+        
+        if (res.error && !res.success) {
+          throw new Error(res.error);
+        }
+        
+        // 2. Save user to local fallback
         addUser(formData);
         
         setSnackbar({ 
           open: true, 
-          message: 'User created successfully!', 
+          message: 'User created successfully in organization!', 
           severity: 'success' 
         });
         
@@ -73,10 +95,20 @@ const AddUser = ({ darkMode, onSave, onCancel }) => { // Fixed component name
         
       } catch (error) {
         console.error('Error creating user:', error);
+        const isConflict = (error.message || '').includes('already exists') || (error.message || '').includes('409');
+        const isMxError = (error.message || '').includes('ENODATA') || (error.message || '').includes('queryMx') || (error.message || '').includes('Invalid email domain');
+        
+        let msg = error.message || 'Error creating user';
+        if (isConflict) {
+          msg = `The email "${formData.email}" is already registered in this organization. Please use a different, unique email address.`;
+        } else if (isMxError) {
+          msg = `Email domain in "${formData.email}" does not have active MX records. Please use a valid domain (e.g. @gmail.com, @aroha.co.in).`;
+        }
+
         setSnackbar({ 
           open: true, 
-          message: 'Error creating user', 
-          severity: 'error' 
+          message: msg, 
+          severity: isConflict ? 'warning' : 'error' 
         });
       } finally {
         setLoading(false);

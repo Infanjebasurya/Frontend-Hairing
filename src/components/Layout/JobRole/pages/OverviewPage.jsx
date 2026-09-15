@@ -19,53 +19,28 @@ const OverviewPage = () => {
       subtitle="Create and manage interview questions manually. Choose from multiple choice, coding challenges, or open-ended question sets."
     >
       <Stack spacing={3}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-          <Card sx={{ flex: 1, borderRadius: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
-            <CardContent sx={{ p: 3 }}>
-              <Stack spacing={2.5}>
-                <Stack direction="row" spacing={1.5} alignItems="center">
-                  <Box sx={{ width: 44, height: 44, borderRadius: 2, bgcolor: 'rgba(37, 99, 235, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <EditNoteIcon color="primary" />
-                  </Box>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      Create New Question
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Start designing a new question flow for {jobDetails.jobRole}.
-                    </Typography>
-                  </Box>
-                </Stack>
-                <Button variant="contained" fullWidth endIcon={<ArrowForwardIcon />} onClick={() => navigate('/job-role/settings')}>
-                  Get Started
-                </Button>
+        <Card sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
+          <CardContent sx={{ p: 3.5 }}>
+            <Stack spacing={3}>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Box sx={{ width: 52, height: 52, borderRadius: 2.5, bgcolor: 'rgba(37, 99, 235, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <EditNoteIcon color="primary" sx={{ fontSize: 28 }} />
+                </Box>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                    Create New Question
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Start designing a new question flow for {jobDetails.jobRole}.
+                  </Typography>
+                </Box>
               </Stack>
-            </CardContent>
-          </Card>
-
-          <Card sx={{ flex: 1, borderRadius: 3, border: '1px solid', borderColor: 'divider', boxShadow: 'none' }}>
-            <CardContent sx={{ p: 3 }}>
-              <Stack spacing={2.5}>
-                <Stack direction="row" spacing={1.5} alignItems="center">
-                  <Box sx={{ width: 44, height: 44, borderRadius: 2, bgcolor: 'rgba(37, 99, 235, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <LibraryBooksIcon color="primary" />
-                  </Box>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      View Question Bank
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Manage, review, and assign existing questions to {jobDetails.jobId}.
-                    </Typography>
-                  </Box>
-                </Stack>
-                <Button variant="contained" fullWidth endIcon={<ArrowForwardIcon />} onClick={() => navigate('/job-role/question-bank')}>
-                  Get Started
-                </Button>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Stack>
+              <Button variant="contained" size="large" endIcon={<ArrowForwardIcon />} onClick={() => navigate('/job-role/settings')}>
+                Get Started
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
 
         <Box
           sx={{
@@ -95,12 +70,9 @@ const OverviewPage = () => {
           </Stack>
         </Box>
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2}>
+        <Stack direction="row" justifyContent="flex-start">
           <Button variant="text" startIcon={<HomeOutlinedIcon />} onClick={() => navigate(-1)}>
             Back
-          </Button>
-          <Button variant="outlined" endIcon={<ArrowForwardIcon />} onClick={() => navigate('/job-role/question-bank')}>
-            View Question Bank
           </Button>
         </Stack>
       </Stack>
