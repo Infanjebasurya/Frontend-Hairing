@@ -78,14 +78,7 @@ const QuestionsGenerationLayout = ({ title, subtitle, children, actions, showRev
             </Stack>
           )}
         </Stack>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between">
-          <Typography variant="body2" color="text.secondary">
-            Job ID: {jobDetails.jobId} | Experience: {jobDetails.experienceYears}y {jobDetails.experienceMonths}m
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {activeStep?.label || title}
-          </Typography>
-        </Stack>
+  
         <Divider />
       </Stack>
 
