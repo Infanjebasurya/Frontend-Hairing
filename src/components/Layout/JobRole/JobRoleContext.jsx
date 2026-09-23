@@ -62,6 +62,24 @@ export const JobRoleProvider = ({ children }) => {
       setJobDetails((prev) => ({ ...prev, ...location.state.jobDetails }));
       setQuestionSource('new_set');
     }
+
+    if (location.state?.candidateData) {
+      const candidate = location.state.candidateData;
+      const candidateSkills = Array.isArray(candidate.skills)
+        ? candidate.skills.filter(Boolean)
+        : [];
+
+      setSelectedCandidate(candidate);
+      setJobDetails((prev) => ({
+        ...prev,
+        jobId: candidate.jobId || prev.jobId,
+        jobRole: candidate.position || prev.jobRole,
+        skills: candidateSkills.length
+          ? { ...prev.skills, hard: candidateSkills }
+          : prev.skills,
+      }));
+      setQuestionSource('new_set');
+    }
   }, [location.state]);
   const [selectedCandidate, setSelectedCandidate] = useState(storedState?.selectedCandidate || null);
   const [questionSource, setQuestionSource] = useState(
@@ -86,6 +104,9 @@ export const JobRoleProvider = ({ children }) => {
   const [generatedQuestionList, setGeneratedQuestionList] = useState(storedState?.generatedQuestionList || generatedQuestions);
   const [finalizedOutput, setFinalizedOutput] = useState(storedState?.finalizedOutput || null);
   const [lastGeneratedAt, setLastGeneratedAt] = useState(storedState?.lastGeneratedAt || null);
+  const [questionBankSaveDecision, setQuestionBankSaveDecision] = useState(
+    storedState?.questionBankSaveDecision || null
+  );
   const [questionTypeCoverage, setQuestionTypeCoverage] = useState(storedState?.questionTypeCoverage || defaultCoverageState);
   const [bankLoading, setBankLoading] = useState(false);
 
@@ -127,6 +148,7 @@ export const JobRoleProvider = ({ children }) => {
         selectedGeneratedIds,
         finalizedOutput,
         lastGeneratedAt,
+        questionBankSaveDecision,
         questionTypeCoverage,
       })
     );
@@ -144,6 +166,7 @@ export const JobRoleProvider = ({ children }) => {
     questionType,
     questionTypeCoverage,
     lastGeneratedAt,
+    questionBankSaveDecision,
     selectedGeneratedIds,
     selectedQuestionIds,
   ]);
@@ -222,21 +245,28 @@ export const JobRoleProvider = ({ children }) => {
     const baseId = `GQ-${Date.now()}`;
     const questionTypeLabel = selectedQuestionType?.label || 'Theory';
     const normalizedType = questionType.toLowerCase();
-    const activeSkills = Object.values(jobDetails.skills).flat().slice(0, 3);
+    const candidateName = selectedCandidate?.name || 'the candidate';
+    const activeSkills = (selectedCandidate?.skills?.length
+      ? selectedCandidate.skills
+      : Object.values(jobDetails.skills).flat()
+    ).slice(0, 3);
+    const targetRole = selectedCandidate?.position || jobDetails.jobRole;
     const newQuestion = {
       id: baseId,
       type: questionTypeLabel,
       difficulty: numberOfQuestions > 8 ? 'Hard' : numberOfQuestions > 4 ? 'Medium' : 'Easy',
-      prompt: `Create a ${questionTypeLabel.toLowerCase()} interview question for ${jobDetails.jobRole} focused on ${activeSkills.join(', ')}.`,
+      prompt: `Create a ${questionTypeLabel.toLowerCase()} interview question for ${candidateName}, applying for ${targetRole}, focused on ${activeSkills.join(', ')}.`,
       details: [
         `Job ID: ${jobDetails.jobId}`,
+        `Candidate: ${candidateName}`,
+        `Candidate ID: ${selectedCandidate?.candidateId || selectedCandidate?.id || 'Not specified'}`,
         `Experience: ${jobDetails.experienceYears}y ${jobDetails.experienceMonths}m`,
         ...(questionTypeCoverage[questionType] || []).slice(0, 2),
       ],
     };
 
     if (normalizedType === 'theory' || normalizedType === 'short_answer') {
-      newQuestion.answer = `Candidate should demonstrate hands-on understanding of ${activeSkills.join(', ')} in the context of ${jobDetails.jobRole}.`;
+      newQuestion.answer = `${candidateName} should demonstrate hands-on understanding of ${activeSkills.join(', ')} in the context of ${targetRole}.`;
     }
 
     if (normalizedType === 'single_correct' || normalizedType === 'multiple_correct') {
@@ -258,13 +288,13 @@ export const JobRoleProvider = ({ children }) => {
     }
 
     if (normalizedType === 'sequence') {
-      newQuestion.orderedItems = ['Review job details', 'Select question type', 'Generate question', 'Assign to job ID'];
+      newQuestion.orderedItems = ['Review candidate profile', 'Select question type', 'Generate question', 'Prepare interview'];
     }
 
     if (normalizedType === 'practical') {
       newQuestion.starterCode = `function test${activeSkills[0]?.replace(/[^a-zA-Z0-9]/g, '') || 'Solution'}() {\n  // Implementation here\n}`;
       newQuestion.expectedOutput = 'Passed all test cases';
-      newQuestion.evaluationNotes = `Check adherence to best practices in ${activeSkills.join(', ')}.`;
+      newQuestion.evaluationNotes = `Check ${candidateName}'s adherence to best practices in ${activeSkills.join(', ')}.`;
     }
 
     setGeneratedQuestionList((prev) => [newQuestion, ...prev]);
@@ -379,6 +409,7 @@ export const JobRoleProvider = ({ children }) => {
   const replaceGeneratedQuestions = (questions) => {
     setGeneratedQuestionList(questions);
     setSelectedGeneratedIds(questions.map((question) => question.id));
+    setQuestionBankSaveDecision(null);
   };
 
   const appendGeneratedQuestions = (questions) => {
@@ -395,16 +426,23 @@ export const JobRoleProvider = ({ children }) => {
     const questionTypeLabel =
       questionTypeDefinitions.find((item) => item.value === questionTypeValue)?.label || 'Theory';
     const normalizedType = (questionTypeValue || 'theory').toLowerCase();
-    const activeSkills = Object.values(jobDetails.skills).flat().slice(0, 3);
+    const candidateName = selectedCandidate?.name || 'the candidate';
+    const activeSkills = (selectedCandidate?.skills?.length
+      ? selectedCandidate.skills
+      : Object.values(jobDetails.skills).flat()
+    ).slice(0, 3);
+    const targetRole = selectedCandidate?.position || jobDetails.jobRole;
     const baseId = `GQ-${Date.now()}-${ordinal}`;
 
     const question = {
       id: baseId,
       type: questionTypeLabel,
       difficulty: numberOfQuestions > 8 ? 'Hard' : numberOfQuestions > 4 ? 'Medium' : 'Easy',
-      prompt: `Create a ${questionTypeLabel.toLowerCase()} interview question for ${jobDetails.jobRole} focused on ${activeSkills.join(', ')}.`,
+      prompt: `Create a ${questionTypeLabel.toLowerCase()} interview question for ${candidateName}, applying for ${targetRole}, focused on ${activeSkills.join(', ')}.`,
       details: [
         `Job ID: ${jobDetails.jobId}`,
+        `Candidate: ${candidateName}`,
+        `Candidate ID: ${selectedCandidate?.candidateId || selectedCandidate?.id || 'Not specified'}`,
         `Experience: ${jobDetails.experienceYears}y ${jobDetails.experienceMonths}m`,
         ...(questionTypeCoverage[questionTypeValue] || []).slice(0, 2),
       ],
@@ -432,7 +470,7 @@ export const JobRoleProvider = ({ children }) => {
     }
 
     if (normalizedType === 'sequence') {
-      question.orderedItems = ['Review job details', 'Select question type', 'Generate question', 'Assign to job ID'];
+      question.orderedItems = ['Review candidate profile', 'Select question type', 'Generate question', 'Prepare interview'];
     }
 
     return question;
@@ -725,6 +763,8 @@ export const JobRoleProvider = ({ children }) => {
     selectedGeneratedQuestions,
     generatedQuestions: generatedQuestionList,
     finalizedOutput,
+    questionBankSaveDecision,
+    setQuestionBankSaveDecision,
     toggleBankQuestion,
     toggleGeneratedQuestion,
     selectAllVisibleBankQuestions,

@@ -3,7 +3,7 @@
 import axios from 'axios';
 
 export const getApiBaseUrl = () => {
-  let url = 'http://35.228.63.177:3001/api';
+  let url = 'https://discretion-innovations-intl-gas.trycloudflare.com/api';
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) {
     url = import.meta.env.VITE_API_URL;
   } else if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL) {

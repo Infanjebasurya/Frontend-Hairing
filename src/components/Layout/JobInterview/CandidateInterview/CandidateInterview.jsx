@@ -69,6 +69,14 @@ import {
   Numbers as NumbersIcon,
   KeyboardDoubleArrowLeft as KeyboardDoubleArrowLeftIcon,
 } from '@mui/icons-material';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import {
+  getOrgCandidates,
+  getOrgCandidatesByJobInterviewId,
+  createOrgCandidate,
+  updateOrgCandidate,
+  deleteOrgCandidate,
+} from '../../../../services/orgCandidateService';
 
 // Import separate components
 import EditCandidate from './EditCandidate';
@@ -76,10 +84,30 @@ import AddCandidate from './AddCandidate';
 import DeleteConfirmation from './DeleteConfirmation';
 import StatusChangeDialog from './StatusChangeDialog';
 
-// API Service (unchanged)
+// Legacy local/demo implementation is kept below for reference, but the
+// active candidate flows now require the organization-candidates API.
+/* eslint-disable no-unreachable */
 const candidateInterviewsApi = {
   getCandidateInterviews: async (params = {}) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
+    const apiResponse = params.jobInterviewId
+      ? await getOrgCandidatesByJobInterviewId(params.jobInterviewId, params)
+      : await getOrgCandidates(params);
+    if (apiResponse.success) {
+      return {
+        data: apiResponse.data,
+        total: apiResponse.total,
+        page: apiResponse.page,
+        limit: apiResponse.limit,
+        totalPages: apiResponse.totalPages,
+      };
+    }
+
+    // Do not show demo candidates when the user's session is unauthorized.
+    if (apiResponse.status === 401 || apiResponse.status === 403) {
+      throw new Error(apiResponse.error || 'You are not authorized to view candidates.');
+    }
+
+    throw new Error(apiResponse.error || 'Failed to load organization candidates.');
 
     let data = JSON.parse(localStorage.getItem('candidateInterviews') || '[]');
 
@@ -416,7 +444,15 @@ const candidateInterviewsApi = {
     };
   },
 
+  createCandidate: async (candidateData) => {
+    const response = await createOrgCandidate(candidateData, candidateData.jobInterviewId);
+    if (response.success) return response;
+    throw new Error(response.error || 'Failed to create organization candidate.');
+  },
+
   getStatistics: async (jobFilter = '') => {
+    throw new Error('Candidate statistics are not available from the organization-candidates API yet.');
+
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const data = JSON.parse(localStorage.getItem('candidateInterviews') || '[]');
@@ -477,7 +513,9 @@ const candidateInterviewsApi = {
   },
 
   updateCandidate: async (id, updates) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
+    const response = await updateOrgCandidate(id, updates, updates.jobInterviewId);
+    if (response.success) return response;
+    throw new Error(response.error || 'Failed to update organization candidate.');
 
     const data = JSON.parse(localStorage.getItem('candidateInterviews') || '[]');
     const updatedData = data.map(item =>
@@ -496,7 +534,9 @@ const candidateInterviewsApi = {
   },
 
   deleteCandidateInterview: async (id) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
+    const response = await deleteOrgCandidate(id);
+    if (response.success) return response;
+    throw new Error(response.error || 'Failed to delete organization candidate.');
 
     const data = JSON.parse(localStorage.getItem('candidateInterviews') || '[]');
     const updatedData = data.filter(item => item.id !== id);
@@ -505,8 +545,12 @@ const candidateInterviewsApi = {
     return { success: true, message: 'Candidate interview deleted successfully' };
   },
 
-  updateCandidateStatus: async (id, status) => {
-    await new Promise(resolve => setTimeout(resolve, 300));
+  updateCandidateStatus: async (id, status, candidate = {}) => {
+    const currentData = JSON.parse(localStorage.getItem('candidateInterviews') || '[]');
+    const currentCandidate = currentData.find(item => item.id === id) || candidate;
+    const response = await updateOrgCandidate(id, { ...currentCandidate, status }, currentCandidate.jobInterviewId);
+    if (response.success) return response;
+    throw new Error(response.error || 'Failed to update candidate status.');
 
     const data = JSON.parse(localStorage.getItem('candidateInterviews') || '[]');
     const updatedData = data.map(item =>
@@ -517,6 +561,7 @@ const candidateInterviewsApi = {
     return { success: true, message: `Status updated to ${status}` };
   },
 };
+/* eslint-enable no-unreachable */
 
 const CandidateInterview = () => {
   const theme = useTheme();
@@ -544,6 +589,7 @@ const CandidateInterview = () => {
   const [sortConfig, setSortConfig] = useState({ field: null, direction: 'asc' });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [jobFilter, setJobFilter] = useState('');
+  const jobInterviewId = location.state?.jobInterviewId || '';
 
   // Modal states
   const [editOpen, setEditOpen] = useState(false);
@@ -605,6 +651,7 @@ const CandidateInterview = () => {
         sortBy: sortConfig.field,
         sortOrder: sortConfig.direction,
         jobFilter: jobFilter,
+        jobInterviewId,
       };
 
       const response = await candidateInterviewsApi.getCandidateInterviews(params);
@@ -616,7 +663,7 @@ const CandidateInterview = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage, searchTerm, statusFilter, positionFilter, sortConfig, jobFilter]);
+  }, [page, rowsPerPage, searchTerm, statusFilter, positionFilter, sortConfig, jobFilter, jobInterviewId]);
 
   // Fetch statistics
   const fetchStatistics = useCallback(async () => {
@@ -744,6 +791,17 @@ const CandidateInterview = () => {
   const handleDeleteCandidate = (row) => {
     setSelectedRow(row);
     setDeleteOpen(true);
+    handleActionClose();
+  };
+
+  const handleQuestionGeneration = (row) => {
+    if (!row) return;
+
+    navigate('/job-role/settings', {
+      state: {
+        candidateData: row,
+      },
+    });
     handleActionClose();
   };
 
@@ -1054,7 +1112,7 @@ const CandidateInterview = () => {
                 <Tooltip title="View Details Page">
                   <IconButton
                     size="small"
-                    onClick={() => navigate(`/candidate/${row.id}`)}  // This should be correct
+                    onClick={() => navigate(`/candidate/${row.id}`, { state: { candidateData: row } })}
                     sx={{
                       color: 'primary.main',
                       bgcolor: alpha(theme.palette.primary.main, 0.1),
@@ -1896,7 +1954,9 @@ const CandidateInterview = () => {
         }}
       >
         <MenuItem
-          onClick={() => navigate(`/candidate/${selectedRow?.id}`)}
+            onClick={() => navigate(`/candidate/${selectedRow?.id}`, {
+              state: { candidateData: selectedRow }
+            })}
           sx={{
             borderRadius: 1,
             mx: 1,
@@ -1940,6 +2000,21 @@ const CandidateInterview = () => {
           <CheckCircleIcon fontSize="small" sx={{ mr: 2, color: 'info.main' }} />
           Change Status
         </MenuItem>
+        <MenuItem
+          onClick={() => handleQuestionGeneration(selectedRow)}
+          sx={{
+            borderRadius: 1,
+            mx: 1,
+            my: 0.5,
+            color: 'text.primary',
+            '&:hover': {
+              bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+            },
+          }}
+        >
+          <AutoAwesomeIcon fontSize="small" sx={{ mr: 2, color: 'primary.main' }} />
+          Question Generation
+        </MenuItem>
         <Divider sx={{ my: 1, borderColor: theme.palette.divider }} />
         <MenuItem
           onClick={() => handleDeleteCandidate(selectedRow)}
@@ -1974,6 +2049,7 @@ const CandidateInterview = () => {
         onSuccess={handleSuccess}
         onError={handleError}
         apiService={candidateInterviewsApi}
+        jobInterviewId={jobInterviewId}
         availablePositions={availablePositions}
         availableStatuses={availableStatuses}
       />

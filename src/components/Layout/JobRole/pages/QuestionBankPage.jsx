@@ -122,7 +122,6 @@ const QuestionBankPage = ({ isSelectionMode: propSelectionMode }) => {
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [draftQuestion, setDraftQuestion] = useState(emptyDraft);
   const [isDraftDialogOpen, setIsDraftDialogOpen] = useState(false);
-  const [assignJobId, setAssignJobId] = useState(jobDetails.jobId || 'JOB001');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState({ open: false, message: '', severity: 'info' });
 
@@ -236,7 +235,7 @@ const QuestionBankPage = ({ isSelectionMode: propSelectionMode }) => {
   };
 
   const handleContinueToReview = () => {
-    assignSelectedBankQuestionsToJob(assignJobId);
+    assignSelectedBankQuestionsToJob();
     navigate('/job-role/review');
   };
 
@@ -336,34 +335,6 @@ const QuestionBankPage = ({ isSelectionMode: propSelectionMode }) => {
             </Grid>
           </Grid>
 
-          {isSelectionMode && (
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Assign selected questions to Job ID"
-                  value={assignJobId}
-                  onChange={(event) => setAssignJobId(event.target.value)}
-                  placeholder="e.g., JOB001"
-                />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent={{ xs: 'stretch', sm: 'flex-end' }}>
-                  <Button
-                    variant="outlined"
-                    disabled={!selectedQuestionIds.length || !assignJobId.trim()}
-                    onClick={() => assignSelectedBankQuestionsToJob(assignJobId)}
-                  >
-                    Assign Selected
-                  </Button>
-                  <Button variant="text" onClick={() => navigate('/job-role/filter')}>
-                    Improve Filters
-                  </Button>
-                </Stack>
-              </Grid>
-            </Grid>
-          )}
-
           {isSelectionMode ? (
             <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
               <Stack direction="row" spacing={1} alignItems="center">
@@ -373,6 +344,9 @@ const QuestionBankPage = ({ isSelectionMode: propSelectionMode }) => {
               <Typography variant="body2" color="text.secondary">
                 {selectedCountLabel}
               </Typography>
+              <Button variant="text" onClick={() => navigate('/job-role/filter')}>
+                Improve Filters
+              </Button>
             </Stack>
           ) : (
             <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -391,7 +365,6 @@ const QuestionBankPage = ({ isSelectionMode: propSelectionMode }) => {
                   <TableCell>Type</TableCell>
                   <TableCell>Difficulty</TableCell>
                   <TableCell>Topic</TableCell>
-                  <TableCell>Job ID</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -434,9 +407,6 @@ const QuestionBankPage = ({ isSelectionMode: propSelectionMode }) => {
                     </TableCell>
                     <TableCell>{row.topic}</TableCell>
                     <TableCell>
-                      <Chip size="small" label={row.jobId || row.assignedJobId || 'General'} variant="outlined" />
-                    </TableCell>
-                    <TableCell>
                       <Stack direction="row" spacing={0.5}>
                         <IconButton size="small" onClick={() => setPreviewQuestion(row)} title="Preview question">
                           <VisibilityOutlinedIcon fontSize="small" />
@@ -453,7 +423,7 @@ const QuestionBankPage = ({ isSelectionMode: propSelectionMode }) => {
                 ))}
                 {!filteredQuestionBank.length && !bankLoading && (
                   <TableRow>
-                    <TableCell colSpan={6}>
+                    <TableCell colSpan={5}>
                       <Box sx={{ py: 5, textAlign: 'center' }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                           No questions found
@@ -505,7 +475,6 @@ const QuestionBankPage = ({ isSelectionMode: propSelectionMode }) => {
                   variant="outlined"
                 />
                 <Chip label={`Topic: ${previewQuestion.topic}`} variant="outlined" />
-                <Chip label={`Job ID: ${previewQuestion.jobId || 'General'}`} variant="outlined" />
               </Stack>
 
               <Divider />
@@ -679,7 +648,7 @@ const QuestionBankPage = ({ isSelectionMode: propSelectionMode }) => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={3}>
+              <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
                   <InputLabel id="dialog-difficulty-label">Difficulty</InputLabel>
                   <Select
@@ -695,15 +664,6 @@ const QuestionBankPage = ({ isSelectionMode: propSelectionMode }) => {
                     <MenuItem value="HARD">HARD</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={3}>
-                <TextField
-                  fullWidth
-                  label="Job ID"
-                  value={draftQuestion.jobId}
-                  onChange={(event) => setDraftQuestion((prev) => ({ ...prev, jobId: event.target.value }))}
-                  placeholder="JOB001"
-                />
               </Grid>
             </Grid>
 

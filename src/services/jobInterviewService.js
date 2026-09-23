@@ -22,6 +22,13 @@ const cleanQueryParams = (params = {}) => {
   return cleaned;
 };
 
+const createUniqueJobId = () => {
+  const suffix = globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+    : `${Date.now()}${Math.floor(Math.random() * 10000)}`.slice(-8);
+  return `JOB-${Date.now()}-${suffix.toUpperCase()}`;
+};
+
 /**
  * 1. Create a new Job Interview
  * Endpoint: POST /api/job-interviews
@@ -40,7 +47,7 @@ const cleanQueryParams = (params = {}) => {
  */
 export const createJobInterview = async (interviewData = {}) => {
   const defaultPayload = {
-    jobId: interviewData.jobId || 'JOB001',
+    jobId: interviewData.jobId || createUniqueJobId(),
     jobTitle: interviewData.jobTitle || 'QA junior job role',
     jdLink: interviewData.jdLink || '',
     candidates: typeof interviewData.candidates === 'number' ? interviewData.candidates : 0,

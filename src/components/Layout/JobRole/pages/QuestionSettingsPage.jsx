@@ -707,7 +707,7 @@ const QuestionSettingsPage = () => {
     }
 
     createNewSetFromManualDrafts(manualDraftQuestions, totalQuestions);
-    navigate('/job-role/review');
+    navigate('/job-role/question-bank');
   };
 
   return (

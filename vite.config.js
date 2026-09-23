@@ -8,7 +8,7 @@ export default defineConfig({
     historyApiFallback: true,
     proxy: {
       '/api': {
-        target: 'http://35.228.63.177:3001',
+        target: 'https://discretion-innovations-intl-gas.trycloudflare.com',
         changeOrigin: true,
         secure: false,
       },

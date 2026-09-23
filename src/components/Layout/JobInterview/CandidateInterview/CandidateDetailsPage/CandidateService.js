@@ -1,7 +1,11 @@
 // src/components/Layout/JobInterview/CandidateInterview/CandidateDetailsPage/CandidateService.js
+import {
+  getOrgCandidates,
+} from '../../../../../services/orgCandidateService';
 
-// FIXED: Removed process.env and used direct value
-const API_BASE_URL = 'http://localhost:3000/api'; // Direct URL - change this to your actual API URL
+// Kept for the legacy resume/cover-letter demo helpers below. Candidate data
+// itself is loaded only through /org-candidates via the shared API client.
+const API_BASE_URL = 'https://discretion-innovations-intl-gas.trycloudflare.com/api';
 
 // Or use relative path if your API is on same origin:
 // const API_BASE_URL = '/api';
@@ -11,33 +15,24 @@ const API_BASE_URL = 'http://localhost:3000/api'; // Direct URL - change this to
 
 export const getCandidateById = async (candidateId) => {
   try {
-    // For development/testing without backend, return mock data
-    if (!API_BASE_URL.includes('localhost:3000')) {
-      console.warn('API base URL not configured, returning mock data');
-      return getMockCandidateData(candidateId);
+    // This deployment does not expose GET /org-candidates/:id (it returns
+    // 404), while the collection endpoint is available. Resolve the real
+    // record from the collection so opening details does not generate a
+    // failed request first.
+    const collectionResult = await getOrgCandidates({ limit: 1000, page: 0 });
+    if (collectionResult.success) {
+      const candidate = collectionResult.data.find((item) =>
+        String(item.id) === String(candidateId) || String(item.candidateId) === String(candidateId)
+      );
+      if (candidate) return candidate;
     }
-    
-    // Get token from localStorage or wherever you store it
-    const token = localStorage.getItem('authToken') || localStorage.getItem('token') || 'demo-token';
-    
-    const response = await fetch(`${API_BASE_URL}/candidates/${candidateId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (!response.ok) {
-      // If API fails, fall back to mock data for development
-      console.warn('API request failed, falling back to mock data');
-      return getMockCandidateData(candidateId);
-    }
-    
-    return await response.json();
+
+    // Keep a useful error if the candidate is not present in the collection.
+    // Do not call the known-missing single-candidate route as a fallback.
+    throw new Error(collectionResult.error || `Candidate ${candidateId} was not found`);
   } catch (error) {
-    console.error('Error fetching candidate, using mock data:', error);
-    // Return mock data as fallback
-    return getMockCandidateData(candidateId);
+    console.error('Error fetching organization candidate:', error);
+    throw error;
   }
 };
 

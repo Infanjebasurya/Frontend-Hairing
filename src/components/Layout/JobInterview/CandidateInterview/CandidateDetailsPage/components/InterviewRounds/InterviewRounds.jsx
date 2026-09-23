@@ -1,5 +1,5 @@
 // src/components/Layout/JobInterview/CandidateInterview/CandidateDetailsPage/components/InterviewRounds/InterviewRounds.jsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Paper,
@@ -25,6 +25,7 @@ import {
   Radio,
   Checkbox,
   FormGroup,
+  MenuItem,
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
@@ -44,13 +45,69 @@ import {
   TextFields as TextFieldsIcon,
   ConnectWithoutContact as ConnectWithoutContactIcon,
   AutoAwesome as AutoAwesomeIcon,
+  Add as AddIcon,
+  DeleteOutline as DeleteOutlineIcon,
 } from '@mui/icons-material';
 
-const InterviewRounds = ({ rounds = [], expandedRound, onExpandRound, onSubmitFeedback }) => {
+const emptyRoundForm = (roundNumber = 1) => ({
+  roundName: '',
+  roundNumber,
+  interviewer: '',
+  isSelfAssigned: false,
+  status: 'Scheduled',
+  scheduledAt: '',
+  roundFeedback: 'not yet scheduled',
+  rating: 0,
+  questionsJson: '[]',
+});
+
+const toDateTimeInput = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
+};
+
+const InterviewRounds = ({
+  rounds = [],
+  expandedRound,
+  onExpandRound,
+  onSubmitFeedback,
+  candidateId,
+  onCreateRound,
+  scheduleRoundRequest = 0,
+  onGetRound,
+  onUpdateRound,
+  onDeleteRound,
+}) => {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [selectedRound, setSelectedRound] = useState(null);
   const [newFeedback, setNewFeedback] = useState('');
   const [rating, setRating] = useState(0);
+  const [roundDialogOpen, setRoundDialogOpen] = useState(false);
+  const [editingRound, setEditingRound] = useState(null);
+  const [roundForm, setRoundForm] = useState(emptyRoundForm(1));
+  const [roundSaving, setRoundSaving] = useState(false);
+  const [roundError, setRoundError] = useState('');
+  const [roundToDelete, setRoundToDelete] = useState(null);
+  const [roundDeleting, setRoundDeleting] = useState(false);
+
+  useEffect(() => {
+    if (scheduleRoundRequest > 0) {
+      const nextRoundNumber = rounds.reduce(
+        (max, round) => Math.max(max, Number(round.roundNumber) || 0),
+        0
+      ) + 1;
+      setEditingRound(null);
+      setRoundForm(emptyRoundForm(nextRoundNumber));
+      setRoundError('');
+      setRoundDialogOpen(true);
+    }
+  // Intentionally trigger only when the parent requests scheduling. Including
+  // `rounds` would reopen the dialog after every successful refresh.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleRoundRequest]);
 
   // Get status color
   const getStatusColor = (status) => {
@@ -261,6 +318,116 @@ const InterviewRounds = ({ rounds = [], expandedRound, onExpandRound, onSubmitFe
     return roundStatus === 'Completed';
   };
 
+  const openCreateRound = () => {
+    const nextRoundNumber = rounds.reduce((max, round) => Math.max(max, Number(round.roundNumber) || 0), 0) + 1;
+    setEditingRound(null);
+    setRoundForm(emptyRoundForm(nextRoundNumber));
+    setRoundError('');
+    setRoundDialogOpen(true);
+  };
+
+  const openEditRound = async (round) => {
+    let selectedRound = round;
+    try {
+      if (onGetRound && round.id) selectedRound = await onGetRound(round.id);
+    } catch (error) {
+      setRoundError(error.message || 'Unable to load interview round.');
+      return;
+    }
+
+    setEditingRound(selectedRound);
+    setRoundForm({
+      roundName: selectedRound.roundName || '',
+      roundNumber: selectedRound.roundNumber || 1,
+      interviewer: selectedRound.interviewer || '',
+      isSelfAssigned: Boolean(selectedRound.isSelfAssigned),
+      status: selectedRound.status || 'Pending Feedback',
+      scheduledAt: toDateTimeInput(selectedRound.scheduledAt),
+      roundFeedback: selectedRound.feedback || selectedRound.notes || '',
+      rating: selectedRound.rating || 0,
+      questionsJson: JSON.stringify(selectedRound.rawQuestionsSet || [], null, 2),
+    });
+    setRoundError('');
+    setRoundDialogOpen(true);
+  };
+
+  const handleRoundFieldChange = (event) => {
+    const { name, value } = event.target;
+    setRoundForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleRoundSubmit = async () => {
+    let questionsSet;
+    try {
+      questionsSet = roundForm.questionsJson.trim() ? JSON.parse(roundForm.questionsJson) : [];
+    } catch {
+      setRoundError('Questions JSON is not valid. Please provide a valid JSON array or object.');
+      return;
+    }
+
+    if (!Array.isArray(questionsSet)) questionsSet = [questionsSet];
+    if (!roundForm.roundName.trim()) {
+      setRoundError('Round name is required.');
+      return;
+    }
+
+    if (!roundForm.isSelfAssigned && !/^[a-f\d]{24}$/i.test(String(roundForm.interviewer).trim())) {
+      setRoundError('Enter a valid 24-character interviewer ID, or select Self assigned.');
+      return;
+    }
+
+    if (!questionsSet.length) {
+      setRoundError('At least one question is required in Questions Set JSON.');
+      return;
+    }
+
+    const invalidQuestion = questionsSet.find((question) => {
+      if (!question || typeof question !== 'object' || !question.questionType) return true;
+      const questionData = question[question.questionType];
+      return !questionData || typeof questionData !== 'object' || !String(questionData.question || '').trim();
+    });
+    if (invalidQuestion) {
+      setRoundError('Questions Set JSON must contain a valid questionType and question text.');
+      return;
+    }
+
+    const payload = {
+      ...roundForm,
+      candidateId,
+      roundNumber: Number(roundForm.roundNumber) || 1,
+      rating: Number(roundForm.rating) || 0,
+      scheduledAt: roundForm.scheduledAt ? new Date(roundForm.scheduledAt).toISOString() : null,
+      questionsSet,
+    };
+
+    try {
+      setRoundSaving(true);
+      if (editingRound) {
+        await onUpdateRound(editingRound.id, payload);
+      } else {
+        await onCreateRound(payload);
+      }
+      setRoundDialogOpen(false);
+    } catch (error) {
+      setRoundError(error.message || 'Unable to save interview round.');
+    } finally {
+      setRoundSaving(false);
+    }
+  };
+
+  const handleDeleteRound = async () => {
+    if (!roundToDelete) return;
+    try {
+      setRoundDeleting(true);
+      await onDeleteRound(roundToDelete.id);
+      setRoundToDelete(null);
+    } catch (error) {
+      setRoundError(error.message || 'Unable to delete interview round.');
+    } finally {
+      setRoundDeleting(false);
+    }
+  };
+
   return (
     <>
       <Paper
@@ -274,10 +441,17 @@ const InterviewRounds = ({ rounds = [], expandedRound, onExpandRound, onSubmitFe
             : '0 18px 48px rgba(15,23,42,0.08)',
         }}
       >
-        <Typography variant="h5" fontWeight="700" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-          <AssessmentIcon />
-          Interview Rounds
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 3 }}>
+          <Typography variant="h5" fontWeight="700" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AssessmentIcon />
+            Interview Rounds
+          </Typography>
+          {onCreateRound && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateRound}>
+              Add Round
+            </Button>
+          )}
+        </Box>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {rounds.map((round) => (
@@ -349,6 +523,20 @@ const InterviewRounds = ({ rounds = [], expandedRound, onExpandRound, onSubmitFe
                       <Typography variant="body2" fontWeight="600">
                         {round.rating}/5
                       </Typography>
+                    </Box>
+                  )}
+                  {(onUpdateRound || onDeleteRound) && (
+                    <Box sx={{ display: 'flex', gap: 0.5 }} onClick={(event) => event.stopPropagation()}>
+                      {onUpdateRound && (
+                        <Button size="small" startIcon={<EditIcon />} onClick={() => openEditRound(round)}>
+                          Edit
+                        </Button>
+                      )}
+                      {onDeleteRound && (
+                        <Button size="small" color="error" startIcon={<DeleteOutlineIcon />} onClick={() => setRoundToDelete(round)}>
+                          Delete
+                        </Button>
+                      )}
                     </Box>
                   )}
                 </Box>
@@ -451,6 +639,61 @@ const InterviewRounds = ({ rounds = [], expandedRound, onExpandRound, onSubmitFe
           ))}
         </Box>
       </Paper>
+
+      <Dialog open={roundDialogOpen} onClose={() => !roundSaving && setRoundDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{editingRound ? 'Update Interview Round' : 'Add Interview Round'}</DialogTitle>
+        <DialogContent dividers>
+          {roundError && <Alert severity="error" sx={{ mb: 2 }}>{roundError}</Alert>}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mt: 1 }}>
+            <TextField label="Round Name" name="roundName" value={roundForm.roundName} onChange={handleRoundFieldChange} required />
+            <TextField label="Round Number" name="roundNumber" type="number" value={roundForm.roundNumber} onChange={handleRoundFieldChange} required />
+            <TextField label="Interviewer ID" name="interviewer" value={roundForm.interviewer} onChange={handleRoundFieldChange} helperText="Use the backend interviewer ID" />
+            <TextField select label="Status" name="status" value={roundForm.status} onChange={handleRoundFieldChange}>
+              {['Scheduled', 'Pending Feedback', 'Completed', 'Cancelled', 'Rescheduled', 'Did Not Attend'].map((status) => (
+                <MenuItem key={status} value={status}>{status}</MenuItem>
+              ))}
+            </TextField>
+            <TextField label="Scheduled At" name="scheduledAt" type="datetime-local" value={roundForm.scheduledAt} onChange={handleRoundFieldChange} InputLabelProps={{ shrink: true }} />
+            <TextField label="Rating" name="rating" type="number" inputProps={{ min: 0, max: 5, step: 0.5 }} value={roundForm.rating} onChange={handleRoundFieldChange} />
+            <FormControlLabel
+              control={<Checkbox checked={roundForm.isSelfAssigned} onChange={(event) => setRoundForm((prev) => ({ ...prev, isSelfAssigned: event.target.checked }))} />}
+              label="Self assigned"
+            />
+            <TextField label="Round Feedback" name="roundFeedback" value={roundForm.roundFeedback} onChange={handleRoundFieldChange} multiline minRows={2} />
+          </Box>
+          <TextField
+            label="Questions Set JSON"
+            value={roundForm.questionsJson}
+            onChange={(event) => setRoundForm((prev) => ({ ...prev, questionsJson: event.target.value }))}
+            multiline
+            minRows={10}
+            fullWidth
+            sx={{ mt: 2 }}
+            helperText="Paste a JSON array using the candidate-rounds questionsSet format."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRoundDialogOpen(false)} disabled={roundSaving}>Cancel</Button>
+          <Button onClick={handleRoundSubmit} variant="contained" disabled={roundSaving}>
+            {roundSaving ? 'Saving...' : editingRound ? 'Update Round' : 'Save Round'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(roundToDelete)} onClose={() => !roundDeleting && setRoundToDelete(null)}>
+        <DialogTitle>Delete interview round?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary">
+            This will permanently remove {roundToDelete?.roundName || 'this round'} and its questions from the candidate.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRoundToDelete(null)} disabled={roundDeleting}>Cancel</Button>
+          <Button onClick={handleDeleteRound} variant="contained" color="error" disabled={roundDeleting}>
+            {roundDeleting ? 'Deleting...' : 'Delete Round'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Feedback Dialog */}
       <Dialog open={feedbackDialogOpen} onClose={() => setFeedbackDialogOpen(false)} maxWidth="md" fullWidth>

@@ -28,6 +28,13 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { createJobInterview, updateJobInterview, searchJobInterviewIds } from '../../../../services/jobInterviewService';
 
+const createUniqueJobId = () => {
+  const suffix = globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+    : `${Date.now()}${Math.floor(Math.random() * 10000)}`.slice(-8);
+  return `JOB-${Date.now()}-${suffix.toUpperCase()}`;
+};
+
 const CreateNewProcess = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -46,7 +53,9 @@ const CreateNewProcess = () => {
   // Form state
   const [formData, setFormData] = useState({
     id: editData?.id || editData?._id || Date.now(),
-    jobId: editData?.jobId || `JOB${String(Date.now()).slice(-4)}`,
+    // Job ID is the human-facing unique interview identifier. Generate it
+    // only for a new interview; existing backend IDs are never replaced.
+    jobId: editData?.jobId || createUniqueJobId(),
     jobTitle: editData?.jobTitle || '',
     jdLink: editData?.jdLink || '',
     interviewRounds: editData?.interviewRounds || [

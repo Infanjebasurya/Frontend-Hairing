@@ -66,7 +66,6 @@ import {
   Group as GroupIcon,
   Person as PersonIcon,
   Restore as RestoreIcon,
-  AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
 import AppLoader from '../../Common/AppLoader';
 import {
@@ -116,13 +115,15 @@ const jobInterviewsApi = {
           : [];
 
         if (rawList.length > 0) {
-          const normalized = rawList.map((item, idx) => {
+          const normalized = rawList.map((item) => {
             const rounds = Array.isArray(item.interviewRounds) ? item.interviewRounds : [];
             const hasSelfAssignedRounds = Boolean(item.hasSelfAssignedRounds || rounds.some((r) => r.isSelfAssigned));
             return {
-              id: item._id || item.id || idx + 1,
+              // A candidate lookup must use the backend interview identifier.
+              // Never manufacture a numeric ID for a missing backend record.
+              id: item._id || item.id || null,
               _id: item._id || item.id,
-              jobId: item.jobId || `JOB${String(idx + 1).padStart(3, '0')}`,
+              jobId: item.jobId || item._id || item.id || '',
               jobTitle: item.jobTitle || 'Job Role',
               jdLink: item.jdLink || '',
               interviewRounds: rounds,
@@ -134,7 +135,7 @@ const jobInterviewsApi = {
               hasSelfAssignedRounds,
               isDeleted: Boolean(item.isDeleted),
             };
-          });
+          }).filter((item) => item.id);
 
           // Sync back to localStorage for smooth offline access
           localStorage.setItem('jobInterviews', JSON.stringify(normalized));
@@ -156,35 +157,10 @@ const jobInterviewsApi = {
       console.warn('[jobInterviewsApi] Remote fetch fallback to local cache:', e);
     }
 
-    // Fallback to cached/mock data if API returns empty
+    // Use only persisted backend records if the remote list is temporarily
+    // unavailable. Demo rows must never be used for candidate API requests.
     let data = JSON.parse(localStorage.getItem('jobInterviews') || '[]');
-    if (data.length === 0) {
-      const mockData = Array.from({ length: 10 }, (_, i) => {
-        const hasSelfInterviews = Math.random() > 0.5;
-        const interviewRounds = Array.from({ length: Math.floor(Math.random() * 3) + 1 }, (_, j) => ({
-          id: Date.now() + j,
-          name: `Round ${j + 1}`,
-          interviewer: 'Rajesh R (rajesh@company.com)',
-          isSelfAssigned: hasSelfInterviews && j === 0,
-        }));
-
-        return {
-          id: i + 1,
-          jobId: `JOB${String(i + 1).padStart(3, '0')}`,
-          jobTitle: ['QA Junior Job Role', 'Fullstack Engineer', 'Product Designer', 'Backend Dev'][i % 4],
-          jdLink: `https://company.com/jd/${i + 1}`,
-          interviewRounds,
-          rounds: interviewRounds.length,
-          status: ['In progress', 'Done', 'Pending'][i % 3],
-          candidates: Math.floor(Math.random() * 20),
-          createdAt: new Date().toISOString(),
-          team: ['HR', 'Tech'],
-          hasSelfAssignedRounds: hasSelfInterviews,
-        };
-      });
-      localStorage.setItem('jobInterviews', JSON.stringify(mockData));
-      data = mockData;
-    }
+    data = data.filter((item) => item && typeof item.id === 'string' && item.id.trim());
 
     let filteredData = [...data];
     if (params.search) {
@@ -524,10 +500,11 @@ const JobInterviews = () => {
 
   const handleViewCandidates = (row) => {
     if (row) {
-      navigate('/candidate-interviews', { 
-        state: { 
-          jobFilter: row.jobId
-        } 
+        navigate('/candidate-interviews', {
+          state: {
+            jobFilter: row.jobId,
+            jobInterviewId: row.id,
+          }
       });
     }
     handleActionClose();
@@ -540,19 +517,6 @@ const JobInterviews = () => {
         message: `Add candidate to ${selectedRow.jobId}`,
         severity: 'info'
       });
-    }
-    handleActionClose();
-  };
-
-  const handleQuestionGeneration = () => {
-    if (selectedRow) {
-      navigate('/job-role/settings', {
-        state: {
-          jobData: selectedRow
-        }
-      });
-    } else {
-      navigate('/job-role/settings');
     }
     handleActionClose();
   };
@@ -2066,21 +2030,6 @@ const JobInterviews = () => {
         >
           <PersonAddIcon fontSize="small" sx={{ mr: 2, color: 'text.secondary' }} />
           Add Candidate
-        </MenuItem>
-        <MenuItem 
-          onClick={handleQuestionGeneration} 
-          sx={{ 
-            borderRadius: 1, 
-            mx: 1, 
-            my: 0.5,
-            color: 'text.primary',
-            '&:hover': {
-              bgcolor: subtleHoverBg,
-            }
-          }}
-        >
-          <AutoAwesomeIcon fontSize="small" sx={{ mr: 2, color: 'text.secondary' }} />
-          Question Generation
         </MenuItem>
         <MenuItem 
           onClick={() => {

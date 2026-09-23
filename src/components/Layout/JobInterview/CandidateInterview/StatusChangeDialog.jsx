@@ -35,7 +35,7 @@ const StatusChangeDialog = ({
   const handleSubmit = async () => {
     try {
       setLoading(true);
-      await apiService.updateCandidateStatus(candidate.id, newStatus);
+      await apiService.updateCandidateStatus(candidate.id, newStatus, candidate);
       onSuccess(`Status updated to ${newStatus} for ${candidate.name}`);
       onClose();
     } catch (err) {

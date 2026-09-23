@@ -57,6 +57,8 @@ const ReviewQuestionsCleanPage = () => {
     getOutputJsonPreview,
     finalizeOutputToJson,
     finalizedOutput,
+    questionBankSaveDecision,
+    setQuestionBankSaveDecision,
     restoreSampleGeneratedQuestions,
     toggleBankQuestion,
     addBankQuestion,
@@ -70,7 +72,14 @@ const ReviewQuestionsCleanPage = () => {
   const [isAddQuestionOpen, setIsAddQuestionOpen] = useState(false);
   const [addDraft, setAddDraft] = useState(null);
   const [isBankPreviewOpen, setIsBankPreviewOpen] = useState(false);
+  const [isSaveDecisionOpen, setIsSaveDecisionOpen] = useState(false);
   const [bankSaveToast, setBankSaveToast] = useState({ open: false, message: '', severity: 'success' });
+
+  useEffect(() => {
+    if (generatedQuestions.length > 0 && questionBankSaveDecision === null) {
+      setIsSaveDecisionOpen(true);
+    }
+  }, [generatedQuestions.length, questionBankSaveDecision]);
 
   useEffect(() => {
     if (!outputPreview) return;
@@ -118,6 +127,10 @@ const ReviewQuestionsCleanPage = () => {
   };
 
   const handleSaveSelectedToBank = async () => {
+    if (questionBankSaveDecision === 'no') {
+      return;
+    }
+
     const existingKeys = new Set((questionBank || []).map((row) => normalizePromptKey(row.question)));
     const topic = resolveTopicForBank();
 
@@ -199,6 +212,15 @@ const ReviewQuestionsCleanPage = () => {
         message: `Error: ${err.message}`,
         severity: 'error',
       });
+    }
+  };
+
+  const handleSaveDecision = async (shouldSave) => {
+    setQuestionBankSaveDecision(shouldSave ? 'yes' : 'no');
+    setIsSaveDecisionOpen(false);
+
+    if (shouldSave) {
+      await handleSaveSelectedToBank();
     }
   };
 
@@ -719,11 +741,35 @@ const ReviewQuestionsCleanPage = () => {
         <Button
           variant="contained"
           onClick={handleSaveSelectedToBank}
-          disabled={!selectedGeneratedQuestions.length}
+          disabled={!selectedGeneratedQuestions.length || questionBankSaveDecision === 'no'}
         >
-          Save Selected to Bank
+          {questionBankSaveDecision === 'no' ? 'Not Saving to Bank' : 'Save Selected to Bank'}
         </Button>
       </Stack>
+
+      <Dialog
+        open={isSaveDecisionOpen}
+        onClose={() => handleSaveDecision(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Save generated questions to Question Bank?</DialogTitle>
+        <DialogContent dividers>
+          <Typography color="text.secondary">
+            You generated {generatedQuestions.length} question(s). Would you like to save the selected questions to
+            the Question Bank? Choosing No will keep them only in this generation review and will not save them to the
+            separate Question Bank section.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => handleSaveDecision(false)} color="inherit">
+            No, keep separate
+          </Button>
+          <Button onClick={() => handleSaveDecision(true)} variant="contained" disabled={!selectedGeneratedQuestions.length}>
+            Yes, save selected
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={Boolean(previewQuestion)} onClose={() => setPreviewQuestion(null)} fullWidth maxWidth="sm">
         <DialogTitle>Question Preview</DialogTitle>

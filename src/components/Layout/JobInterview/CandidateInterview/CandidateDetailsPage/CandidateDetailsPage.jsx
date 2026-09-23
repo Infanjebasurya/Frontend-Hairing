@@ -1,6 +1,6 @@
 // src/components/Layout/JobInterview/CandidateInterview/CandidateDetailsPage/CandidateDetailsPage.jsx
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -22,15 +22,26 @@ import {
 import CandidateProfile from './components/CandidateProfile/CandidateProfile';
 import InternalQuestions from './components/InternalQuestions/InternalQuestions';
 import InterviewRounds from './components/InterviewRounds/InterviewRounds';
-import { getCandidateById, downloadResume, downloadCoverLetter } from './CandidateService';
+import { getCandidateById } from './CandidateService';
+import {
+  getCandidateRounds,
+  getCandidateRoundById,
+  createCandidateRound,
+  updateCandidateRound,
+  deleteCandidateRound,
+  normalizeCandidateRound,
+} from '../../../../../services/candidateRoundService';
 
 const CandidateDetailsPage = () => {
   const { candidateId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const initialCandidate = location.state?.candidateData || null;
   const [candidate, setCandidate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expandedRound, setExpandedRound] = useState(null);
+  const [scheduleRoundRequest, setScheduleRoundRequest] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
@@ -43,8 +54,15 @@ const CandidateDetailsPage = () => {
     const fetchCandidate = async () => {
       setLoading(true);
       try {
-        const data = await getCandidateById(candidateId);
+        // The list already contains the real organization candidate record.
+        // Use it immediately and only query the collection when the page was
+        // opened directly without navigation state.
+        const data = initialCandidate || await getCandidateById(candidateId);
+        const roundsResult = await getCandidateRounds(candidateId);
         const transformedData = transformCandidateData(data);
+        if (roundsResult.success) {
+          transformedData.interviewRounds = roundsResult.data;
+        }
         setCandidate(transformedData);
       } catch (err) {
         setError(`Failed to load candidate: ${err.message}`);
@@ -54,20 +72,41 @@ const CandidateDetailsPage = () => {
     };
 
     fetchCandidate();
-  }, [candidateId]);
+  }, [candidateId, initialCandidate]);
+
+  const refreshCandidate = async () => {
+    const roundsResult = await getCandidateRounds(candidateId);
+    if (!roundsResult.success) {
+      throw new Error(roundsResult.error || 'Failed to refresh interview rounds');
+    }
+
+    // Candidate profile data does not change when a round is added or edited.
+    // Update the existing real candidate object and replace only its rounds.
+    if (candidate) {
+      const updatedCandidate = { ...candidate, interviewRounds: roundsResult.data };
+      setCandidate(updatedCandidate);
+      return updatedCandidate;
+    }
+
+    const data = initialCandidate || await getCandidateById(candidateId);
+    const transformedData = transformCandidateData(data);
+    transformedData.interviewRounds = roundsResult.data;
+    setCandidate(transformedData);
+    return transformedData;
+  };
 
   const transformCandidateData = (apiData) => {
     return {
       id: apiData.id,
-      candidateId: apiData.candidate_id || apiData.id,
-      jobId: apiData.job_id,
-      name: apiData.name,
-      email: apiData.email,
-      phone: apiData.phone,
-      position: apiData.applied_role || apiData.position,
-      status: apiData.status || 'In Progress',
-      experience: apiData.experience || 'Not specified',
-      location: apiData.location || 'Not specified',
+      candidateId: apiData.candidate_id || apiData.candidateId || apiData.id,
+      jobId: apiData.job_id || apiData.jobInterviewId,
+      name: apiData.name || apiData.candidateName,
+      email: apiData.email || apiData.candidateEmail,
+      phone: apiData.phone || apiData.candidatePhone,
+      position: apiData.applied_role || apiData.position || apiData.currentJobPosition,
+      status: apiData.status || apiData.interviewDetails?.stage || 'In Progress',
+      experience: apiData.experience || apiData.currentExperience || 'Not specified',
+      location: apiData.location || apiData.candidateCurrentLocation || 'Not specified',
       source: apiData.source || 'Not specified',
       availability: apiData.availability || 'Not specified',
       skills: apiData.skills || [],
@@ -119,8 +158,13 @@ const CandidateDetailsPage = () => {
         })) || []
       })) || [],
       
-      roundsCompleted: apiData.interview_rounds?.filter(r => r.status === 'Completed').length || 0,
-      totalRounds: apiData.interview_rounds?.length || 0
+      roundsCompleted: apiData.interview_rounds?.filter(r => r.status === 'Completed').length
+        || apiData.roundsCompleted
+        || apiData.interviewDetails?.roundCompleted?.length
+        || 0,
+      totalRounds: apiData.interview_rounds?.length
+        || apiData.interviewDetails?.scheduledrounds?.length
+        || 0
     };
   };
 
@@ -129,7 +173,7 @@ const CandidateDetailsPage = () => {
     try {
       // Create PDF blob for demo
       const resumeContent = `
-        Resume - Alice Johnson
+        Resume - ${candidate.name}
         ======================
         
         Contact Information:
@@ -169,7 +213,7 @@ const CandidateDetailsPage = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Resume_Alice_Johnson_${candidateId}.pdf`;
+      a.download = `Resume_${candidate.name.replace(/[^a-z0-9]+/gi, '_')}_${candidateId}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -188,7 +232,7 @@ const CandidateDetailsPage = () => {
       //   message: 'Resume downloaded successfully',
       //   severity: 'success'
       // });
-    } catch (err) {
+    } catch {
       setSnackbar({
         open: true,
         message: 'Failed to download resume',
@@ -200,7 +244,7 @@ const CandidateDetailsPage = () => {
   const handleDownloadCoverLetter = async () => {
     try {
       const coverLetterContent = `
-        Cover Letter - Alice Johnson
+        Cover Letter - ${candidate.name}
         ============================
         
         Dear Hiring Manager,
@@ -213,7 +257,7 @@ const CandidateDetailsPage = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Cover_Letter_Alice_Johnson_${candidateId}.pdf`;
+      a.download = `Cover_Letter_${candidate.name.replace(/[^a-z0-9]+/gi, '_')}_${candidateId}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -224,7 +268,7 @@ const CandidateDetailsPage = () => {
         message: 'Cover letter downloaded as PDF',
         severity: 'success'
       });
-    } catch (err) {
+    } catch {
       setSnackbar({
         open: true,
         message: 'Failed to download cover letter',
@@ -249,12 +293,24 @@ const CandidateDetailsPage = () => {
   };
 
   const handleScheduleRound = () => {
-    navigate(`/candidate-interviews/schedule/${candidateId}`);
+    // Scheduling is handled by the candidate-round dialog on this page.
+    // The old route did not exist and caused a 404.
+    setScheduleRoundRequest((request) => request + 1);
   };
 
   const handleSubmitFeedback = async (round) => {
     try {
-      console.log('Submit feedback for round:', round);
+      const response = await updateCandidateRound(
+        round.id,
+        {
+          ...round,
+          roundFeedback: round.feedback,
+          status: 'Completed',
+          rawQuestionsSet: round.rawQuestionsSet || [],
+        },
+        candidateId
+      );
+      if (!response.success) throw new Error(response.error || 'Failed to submit feedback');
       setSnackbar({
         open: true,
         message: `Feedback submitted for ${round.roundName}`,
@@ -262,15 +318,75 @@ const CandidateDetailsPage = () => {
       });
       
       // Refresh data
-      const data = await getCandidateById(candidateId);
-      setCandidate(transformCandidateData(data));
-    } catch (err) {
+      await refreshCandidate();
+    } catch {
       setSnackbar({
         open: true,
         message: 'Failed to submit feedback',
         severity: 'error'
       });
     }
+  };
+
+  const handleCreateRound = async (round) => {
+    const response = await createCandidateRound(round, candidateId);
+    if (!response.success) throw new Error(response.error || 'Failed to create interview round');
+    const refreshed = await refreshCandidate();
+
+    // Some deployments return the new round before the list endpoint is
+    // eventually consistent. Keep the newly-created round visible immediately
+    // without creating a local/mock ID.
+    const createdPayload = response.data?.data || response.data?.round || response.data;
+    const createdId = createdPayload?._id || createdPayload?.id;
+    if (createdId && !refreshed.interviewRounds.some((item) => String(item.id) === String(createdId))) {
+      setCandidate({
+        ...refreshed,
+        interviewRounds: [...refreshed.interviewRounds, normalizeCandidateRound(createdPayload)],
+      });
+    }
+  };
+
+  const handleUpdateRound = async (roundId, round) => {
+    const previousRound = candidate?.interviewRounds?.find(
+      (item) => String(item.id) === String(roundId)
+    );
+    const response = await updateCandidateRound(roundId, round, candidateId);
+    if (!response.success) throw new Error(response.error || 'Failed to update interview round');
+    const refreshed = await refreshCandidate();
+
+    // Keep the edited round visible when the backend list endpoint is
+    // eventually consistent and temporarily omits it after PUT.
+    const updatedPayload = response.data?.data || response.data?.round || response.data;
+    const updatedRound = normalizeCandidateRound({
+      ...(previousRound || {}),
+      ...round,
+      ...(updatedPayload && typeof updatedPayload === 'object' ? updatedPayload : {}),
+      _id: updatedPayload?._id || updatedPayload?.id || roundId,
+      id: updatedPayload?._id || updatedPayload?.id || roundId,
+    });
+    const existingIndex = refreshed.interviewRounds.findIndex(
+      (item) => String(item.id) === String(roundId)
+    );
+
+    const visibleRounds = existingIndex === -1
+      ? [...refreshed.interviewRounds, updatedRound]
+      : refreshed.interviewRounds.map((item, index) => (
+        index === existingIndex ? updatedRound : item
+      ));
+
+    setCandidate({ ...refreshed, interviewRounds: visibleRounds });
+  };
+
+  const handleGetRound = async (roundId) => {
+    const response = await getCandidateRoundById(roundId);
+    if (!response.success) throw new Error(response.error || 'Failed to load interview round');
+    return response.data;
+  };
+
+  const handleDeleteRound = async (roundId) => {
+    const response = await deleteCandidateRound(roundId);
+    if (!response.success) throw new Error(response.error || 'Failed to delete interview round');
+    await refreshCandidate();
   };
 
   const handleCloseSnackbar = () => {
@@ -536,6 +652,12 @@ const CandidateDetailsPage = () => {
               expandedRound={expandedRound}
               onExpandRound={setExpandedRound}
               onSubmitFeedback={handleSubmitFeedback}
+              candidateId={candidateId}
+              onCreateRound={handleCreateRound}
+              scheduleRoundRequest={scheduleRoundRequest}
+              onGetRound={handleGetRound}
+              onUpdateRound={handleUpdateRound}
+              onDeleteRound={handleDeleteRound}
             />
           </Box>
         </Grid>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -20,6 +20,7 @@ const AddCandidate = ({
   onSuccess, 
   onError, 
   apiService,
+  jobInterviewId = '',
   availablePositions,
   availableStatuses 
 }) => {
@@ -34,9 +35,14 @@ const AddCandidate = ({
     experience: '0 years',
     location: '',
     notes: '',
+    jobInterviewId,
   });
 
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setFormData(prev => ({ ...prev, jobInterviewId: jobInterviewId || prev.jobInterviewId }));
+  }, [jobInterviewId]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -49,22 +55,12 @@ const AddCandidate = ({
       
       const newCandidateData = {
         ...formData,
-        id: Date.now(),
-        candidateId: `CAND${String(Date.now()).slice(-6)}`,
-        currentRound: 'HR Screening',
-        lastUpdated: new Date().toISOString().split('T')[0],
-        interviewer: formData.interviewer || 'To be assigned',
-        source: 'Manual Entry',
-        rating: 0,
-        resumeLink: '',
-        skills: [],
-        feedback: '',
-        education: '',
-        availability: 'Immediate',
       };
 
-      const data = JSON.parse(localStorage.getItem('candidateInterviews') || '[]');
-      localStorage.setItem('candidateInterviews', JSON.stringify([...data, newCandidateData]));
+      const response = await apiService.createCandidate(newCandidateData);
+      if (!response?.success) {
+        throw new Error(response?.error || 'Failed to create candidate');
+      }
 
       onSuccess(`Candidate "${formData.name}" added successfully`);
       resetForm();
@@ -89,6 +85,7 @@ const AddCandidate = ({
       experience: '0 years',
       location: '',
       notes: '',
+      jobInterviewId,
     });
   };
 
@@ -111,6 +108,18 @@ const AddCandidate = ({
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
           <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Job Interview ID"
+                name="jobInterviewId"
+                value={formData.jobInterviewId}
+                onChange={handleChange}
+                fullWidth
+                size="small"
+                required
+                helperText="Use the interview ID this candidate belongs to"
+              />
+            </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 label="Name"
@@ -247,7 +256,7 @@ const AddCandidate = ({
         <Button
           onClick={handleSubmit}
           variant="contained"
-          disabled={loading || !formData.name || !formData.email}
+          disabled={loading || !formData.jobInterviewId || !formData.name || !formData.email}
         >
           {loading ? 'Adding...' : 'Add Candidate'}
         </Button>

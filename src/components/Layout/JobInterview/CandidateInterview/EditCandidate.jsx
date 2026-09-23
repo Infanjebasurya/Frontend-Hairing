@@ -63,7 +63,10 @@ const EditCandidate = ({ open, onClose, candidate, onSuccess, onError, apiServic
   const handleSubmit = async () => {
     try {
       setLoading(true);
-      await apiService.updateCandidate(candidate.id, formData);
+      await apiService.updateCandidate(candidate.id, {
+        ...formData,
+        jobInterviewId: candidate.jobInterviewId,
+      });
       onSuccess('Candidate updated successfully');
       onClose();
     } catch (err) {
