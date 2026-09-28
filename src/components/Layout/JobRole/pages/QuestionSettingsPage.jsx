@@ -38,12 +38,8 @@ import { useNavigate } from 'react-router-dom';
 import QuestionsGenerationLayout from '../components/QuestionsGenerationLayout';
 import { useJobRole } from '../useJobRole';
 import { questionTypeDefinitions, questionTypeRequirementMap, skillGroups } from '../questionGenerationData';
-
-const skillSections = [
-  { key: 'hard', label: 'Hard Skills' },
-  { key: 'soft', label: 'Soft Skills' },
-  { key: 'transferable', label: 'Transferable Skills' },
-];
+import { skillSections } from './questionSettingsConstants';
+import { InfoTile } from './questionSettingsParts';
 
 const QuestionSettingsPage = () => {
   const navigate = useNavigate();
@@ -1473,23 +1469,5 @@ const QuestionSettingsPage = () => {
     </QuestionsGenerationLayout>
   );
 };
-
-const InfoTile = ({ label, value }) => (
-  <Stack
-    spacing={0.5}
-    sx={{
-      py: 1.25,
-      borderBottom: '1px solid',
-      borderColor: 'divider',
-    }}
-  >
-    <Typography variant="caption" color="text.secondary">
-      {label}
-    </Typography>
-    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-      {value}
-    </Typography>
-  </Stack>
-);
 
 export default QuestionSettingsPage;
