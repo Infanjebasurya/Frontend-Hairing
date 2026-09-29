@@ -1,176 +1,100 @@
+// src/components/HiringForm/sections/ExperienceSection.jsx
 import React from 'react';
 import {
-  Box,
-  Paper,
-  Grid,
-  Typography,
-  IconButton,
-  Tooltip,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
-  InputAdornment,
-  FormControlLabel,
-  Checkbox,
-  Button
+  Box, Grid, Typography, IconButton, Tooltip, Button,
+  FormControl, InputLabel, Select, MenuItem, Chip, InputAdornment,
+  FormControlLabel, Checkbox,
 } from '@mui/material';
-import {
-  Delete,
-  Add,
-  Work,
-  Code,
-  Psychology,
-  Build,
-  Group
-} from '@mui/icons-material';
+import { Delete, Add, Work, Code, Psychology, Build, Group } from '@mui/icons-material';
 import { Zoom } from '@mui/material';
 import { FormTextField, SectionHeader, InfoAlert } from '../components/FormComponents';
+import { ExperienceCard, ExperienceHeader, EmptyStateBox, SkillsInputPaper } from './ExperienceSection.styles';
+
+const SKILL_CATEGORIES = [
+  { value: 'technical',  label: 'Technical Skills',       icon: <Code /> },
+  { value: 'soft',       label: 'Soft Skills',            icon: <Psychology /> },
+  { value: 'tools',      label: 'Tools & Technologies',   icon: <Build /> },
+  { value: 'frameworks', label: 'Frameworks & Platforms', icon: <Group /> },
+];
 
 const ExperienceSection = ({
-  formData,
-  errors,
-  handleNestedArrayChange,
-  handleInputChange,
-  addArrayItem,
-  removeArrayItem,
-  darkMode = false,
-  isSmallMobile = false
+  formData, errors,
+  handleNestedArrayChange, handleInputChange,
+  addArrayItem, removeArrayItem,
+  darkMode = false, isSmallMobile = false,
 }) => {
-  const skillCategories = [
-    { value: 'technical', label: 'Technical Skills', icon: <Code /> },
-    { value: 'soft', label: 'Soft Skills', icon: <Psychology /> },
-    { value: 'tools', label: 'Tools & Technologies', icon: <Build /> },
-    { value: 'frameworks', label: 'Frameworks & Platforms', icon: <Group /> }
-  ];
+  const sz = isSmallMobile ? 'small' : 'medium';
 
-  // Add skill to specific experience
-  const handleAddSkillToExperience = (expIndex) => {
+  const addSkillToExperience = (expIndex) => {
     const { newSkill, skillExperience, skillCategory } = formData;
-    if (newSkill && newSkill.trim() && skillExperience && skillCategory) {
-      const newSkillObj = {
-        name: newSkill.trim(),
-        experience: skillExperience,
-        category: skillCategory
-      };
-
-      const currentExperience = formData.experiences[expIndex];
-      const updatedSkills = [...(currentExperience.skills || []), newSkillObj];
-
-      handleNestedArrayChange('experiences', expIndex, 'skills', updatedSkills);
-
-      // Clear the skill input fields using handleInputChange
-      handleInputChange('newSkill', '');
-      handleInputChange('skillExperience', '');
-      handleInputChange('skillCategory', '');
-    }
+    if (!newSkill?.trim() || !skillExperience || !skillCategory) return;
+    const updated = [...(formData.experiences[expIndex].skills || []),
+      { name: newSkill.trim(), experience: skillExperience, category: skillCategory }];
+    handleNestedArrayChange('experiences', expIndex, 'skills', updated);
+    handleInputChange('newSkill', '');
+    handleInputChange('skillExperience', '');
+    handleInputChange('skillCategory', '');
   };
 
-  // Remove skill from specific experience
-  const handleRemoveSkillFromExperience = (expIndex, skillIndex) => {
-    const currentExperience = formData.experiences[expIndex];
-    const updatedSkills = currentExperience.skills.filter((_, i) => i !== skillIndex);
-    handleNestedArrayChange('experiences', expIndex, 'skills', updatedSkills);
+  const removeSkillFromExperience = (expIndex, skillIndex) => {
+    const updated = formData.experiences[expIndex].skills.filter((_, i) => i !== skillIndex);
+    handleNestedArrayChange('experiences', expIndex, 'skills', updated);
   };
 
-  // Handle nested array changes properly
-  const handleExperienceChange = (index, field, value) => {
-    handleNestedArrayChange('experiences', index, field, value);
-  };
-
-  // Render skills section for each experience
-  const renderSkillsSection = (exp, expIndex) => (
+  const renderSkillsPanel = (exp, expIndex) => (
     <Box sx={{ mt: 3, mb: 2 }}>
       <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'secondary.main' }}>
-        <Code />
-        Skills Used in This Role
+        <Code />Skills Used in This Role
       </Typography>
 
-      {/* Add Skills Form */}
-      <Paper sx={{
-        p: 2,
-        mb: 2,
-        border: '1px solid',
-        borderColor: 'divider',
-        background: darkMode ? 'rgba(15, 23, 42, 0.64)' : '#ffffff'
-      }}>
-        <Grid container spacing={2} alignItems="end">
+      <SkillsInputPaper>
+        <Grid container spacing={2} alignItems="flex-end">
           <Grid item xs={12} sm={4}>
-            <FormControl fullWidth size={isSmallMobile ? "small" : "medium"}>
+            <FormControl fullWidth size={sz}>
               <InputLabel>Skill Category</InputLabel>
-              <Select
-                value={formData.skillCategory || ''}
-                label="Skill Category"
-                onChange={(e) => handleInputChange('skillCategory', e.target.value)}
-              >
-                {skillCategories.map((category) => (
-                  <MenuItem key={category.value} value={category.value}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {category.icon}
-                      {category.label}
-                    </Box>
+              <Select value={formData.skillCategory || ''} label="Skill Category"
+                onChange={(e) => handleInputChange('skillCategory', e.target.value)}>
+                {SKILL_CATEGORIES.map((c) => (
+                  <MenuItem key={c.value} value={c.value}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>{c.icon}{c.label}</Box>
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Grid>
-
           <Grid item xs={12} sm={4}>
-            <FormTextField
-              label="Skill Name"
-              value={formData.newSkill || ''}
+            <FormTextField label="Skill Name" value={formData.newSkill || ''}
               onChange={(e) => handleInputChange('newSkill', e.target.value)}
-              placeholder="e.g., React, Python, Leadership"
-              size={isSmallMobile ? "small" : "medium"}
-              darkMode={darkMode}
-            />
+              placeholder="e.g., React, Python" size={sz} darkMode={darkMode} />
           </Grid>
-
           <Grid item xs={12} sm={3}>
-            <FormTextField
-              label="Experience Level"
-              value={formData.skillExperience || ''}
+            <FormTextField label="Experience Level" value={formData.skillExperience || ''}
               onChange={(e) => handleInputChange('skillExperience', e.target.value)}
-              placeholder="e.g., 3 years, Advanced"
-              size={isSmallMobile ? "small" : "medium"}
-              darkMode={darkMode}
-            />
+              placeholder="e.g., 3 years" size={sz} darkMode={darkMode} />
           </Grid>
-
           <Grid item xs={12} sm={1}>
             <Tooltip title="Add Skill to This Role">
               <IconButton
-                onClick={() => handleAddSkillToExperience(expIndex)}
+                onClick={() => addSkillToExperience(expIndex)}
                 disabled={!formData.newSkill?.trim() || !formData.skillExperience || !formData.skillCategory}
-                color="primary"
-                sx={{ height: '56px', width: '100%' }}
-              >
+                color="primary" sx={{ height: 56, width: '100%' }}>
                 <Add />
               </IconButton>
             </Tooltip>
           </Grid>
         </Grid>
-      </Paper>
+      </SkillsInputPaper>
 
-      {/* Skills List for this Experience */}
-      {exp.skills && exp.skills.length > 0 && (
+      {exp.skills?.length > 0 && (
         <Box sx={{ mb: 2 }}>
           <Grid container spacing={1}>
-            {exp.skills.map((skill, skillIndex) => (
-              <Grid item key={skillIndex}>
+            {exp.skills.map((skill, si) => (
+              <Grid item key={si}>
                 <Chip
                   label={`${skill.name} (${skill.experience})`}
-                  onDelete={() => handleRemoveSkillFromExperience(expIndex, skillIndex)}
-                  color="secondary"
-                  variant="outlined"
-                  deleteIcon={<Delete />}
-                  size={isSmallMobile ? "small" : "medium"}
-                  sx={{
-                    fontWeight: 'bold',
-                    backgroundColor: darkMode ? 'rgba(244, 143, 177, 0.1)' : 'transparent',
-                    border: darkMode ? '1px solid rgba(244, 143, 177, 0.3)' : '1px solid rgba(0, 0, 0, 0.2)',
-                  }}
+                  onDelete={() => removeSkillFromExperience(expIndex, si)}
+                  color="secondary" variant="outlined" deleteIcon={<Delete />} size={sz}
+                  sx={{ fontWeight: 'bold' }}
                 />
               </Grid>
             ))}
@@ -182,279 +106,126 @@ const ExperienceSection = ({
 
   return (
     <Box sx={{ mt: 3 }}>
-      <InfoAlert
-        icon={<Work />}
-        title="Work Experience & Skills"
-        darkMode={darkMode}
-      >
-        Add your work experience in reverse chronological order. For each role, include the skills you used and your proficiency level.
-        Skills are now integrated with each work experience for better context.
+      <InfoAlert icon={<Work />} title="Work Experience & Skills" darkMode={darkMode}>
+        Add your work experience in reverse chronological order. For each role, include the skills you used.
       </InfoAlert>
 
       <SectionHeader
         icon={<Work />}
         title="Professional Experience & Skills"
+        subtitle="Add your work history and the skills you utilized in each role"
         actionButton={
-          <Button
-            startIcon={<Add />}
+          <Button variant="outlined" color="primary" size={sz} startIcon={<Add />}
             onClick={() => addArrayItem('experiences', {
-              jobTitle: '',
-              company: '',
-              startDate: '',
-              endDate: '',
-              location: '',
-              responsibilities: '',
-              achievements: '',
-              technologies: '',
-              currentlyWorking: false,
-              skills: []
-            })}
-            variant="outlined"
-            color="primary"
-            size={isSmallMobile ? "small" : "medium"}
-          >
+              jobTitle:'', company:'', startDate:'', endDate:'', location:'',
+              responsibilities:'', achievements:'', technologies:'', currentlyWorking: false, skills: [],
+            })}>
             Add Experience
           </Button>
         }
-        subtitle="Add your work history and the skills you utilized in each role"
       />
 
       {formData.experiences.map((exp, index) => (
-        <Zoom in={true} timeout={500} key={index}>
-          <Paper sx={{
-            p: { xs: 2, md: 3 },
-            mb: 3,
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 2,
-            background: darkMode ? 'rgba(15, 23, 42, 0.64)' : '#ffffff',
-            boxShadow: darkMode ? '0 12px 32px rgba(0,0,0,0.22)' : '0 12px 32px rgba(15,23,42,0.06)'
-          }}>
-            {/* Experience Header */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 3 }}>
+        <Zoom in timeout={500} key={index}>
+          <ExperienceCard>
+            <ExperienceHeader>
               <Typography variant="h6" color="primary" fontWeight={800}>
                 Experience #{index + 1}
               </Typography>
               {formData.experiences.length > 1 && (
                 <Tooltip title="Remove this experience">
-                  <IconButton
-                    size="small"
-                    color="error"
-                    onClick={() => removeArrayItem('experiences', index)}
-                  >
+                  <IconButton size="small" color="error" onClick={() => removeArrayItem('experiences', index)}>
                     <Delete />
                   </IconButton>
                 </Tooltip>
               )}
-            </Box>
+            </ExperienceHeader>
 
             <Grid container spacing={3}>
-              {/* Basic Information */}
+              {/* Job Title + Company */}
               <Grid item xs={12} md={6}>
-                <FormTextField
-                  required
-                  label="Job Title"
-                  value={exp.jobTitle || ''}
-                  onChange={(e) => handleExperienceChange(index, 'jobTitle', e.target.value)}
+                <FormTextField required label="Job Title" value={exp.jobTitle || ''}
+                  onChange={(e) => handleNestedArrayChange('experiences', index, 'jobTitle', e.target.value)}
                   error={!!errors[`experiences_${index}_jobTitle`]}
                   helperText={errors[`experiences_${index}_jobTitle`]}
-                  placeholder="e.g., Senior Software Engineer"
-                  size={isSmallMobile ? "small" : "medium"}
-                  darkMode={darkMode}
-                />
+                  placeholder="e.g., Senior Software Engineer" size={sz} darkMode={darkMode} />
               </Grid>
-
               <Grid item xs={12} md={6}>
-                <FormTextField
-                  required
-                  label="Company Name"
-                  value={exp.company || ''}
-                  onChange={(e) => handleExperienceChange(index, 'company', e.target.value)}
+                <FormTextField required label="Company Name" value={exp.company || ''}
+                  onChange={(e) => handleNestedArrayChange('experiences', index, 'company', e.target.value)}
                   error={!!errors[`experiences_${index}_company`]}
                   helperText={errors[`experiences_${index}_company`]}
-                  placeholder="e.g., Google Inc."
-                  size={isSmallMobile ? "small" : "medium"}
-                  darkMode={darkMode}
-                />
+                  placeholder="e.g., Google Inc." size={sz} darkMode={darkMode} />
               </Grid>
 
+              {/* Dates + Location + Currently Working */}
               <Grid item xs={12} sm={6} md={3}>
-                <FormTextField
-                  required
-                  label="Start Date"
-                  type="date"
-                  value={exp.startDate || ''}
-                  onChange={(e) =>
-                    handleExperienceChange(index, 'startDate', e.target.value)
-                  }
+                <FormTextField required label="Start Date" type="date" value={exp.startDate || ''}
+                  onChange={(e) => handleNestedArrayChange('experiences', index, 'startDate', e.target.value)}
                   error={!!errors[`experiences_${index}_startDate`]}
                   helperText={errors[`experiences_${index}_startDate`]}
-                  size={isSmallMobile ? 'small' : 'medium'}
-                  darkMode={darkMode}
-                  InputLabelProps={{ shrink: true }}
-                  sx={{
-                    '& input[type="date"]::-webkit-calendar-picker-indicator': {
-                      filter: darkMode ? 'invert(1)' : 'invert(0.5)',
-                      cursor: 'pointer',
-                      opacity: 1,
-                    },
-                    '& input[type="date"]': {
-                      colorScheme: darkMode ? 'dark' : 'light',
-                    },
-                    '& .MuiOutlinedInput-root': {
-                      color: darkMode ? '#fff' : '#000',
-                      '& fieldset': {
-                        borderColor: darkMode ? '#555' : '#ccc',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: darkMode ? '#81c784' : '#1976d2',
-                      },
-                    },
-                    '& .MuiInputLabel-root': {
-                      color: darkMode ? '#ccc' : '#444',
-                    },
-                  }}
-                />
+                  size={sz} darkMode={darkMode} InputLabelProps={{ shrink: true }} />
               </Grid>
-
               <Grid item xs={12} sm={6} md={3}>
-                <FormTextField
-                  label="End Date"
-                  type="date"
-                  value={exp.endDate || ''}
-                  onChange={(e) => handleExperienceChange(index, 'endDate', e.target.value)}
+                <FormTextField label="End Date" type="date" value={exp.endDate || ''}
+                  onChange={(e) => handleNestedArrayChange('experiences', index, 'endDate', e.target.value)}
                   disabled={exp.currentlyWorking}
                   error={!!errors[`experiences_${index}_endDate`]}
                   helperText={errors[`experiences_${index}_endDate`]}
-                  size={isSmallMobile ? 'small' : 'medium'}
-                  darkMode={darkMode}
-                  InputLabelProps={{ shrink: true }}
-                  InputProps={{
-                    endAdornment: exp.currentlyWorking ? (
-                      <InputAdornment position="end">
-                        <Chip label="Present" size="small" color="success" />
-                      </InputAdornment>
-                    ) : null,
-                  }}
-                  sx={{
-                    '& input[type="date"]::-webkit-calendar-picker-indicator': {
-                      filter: darkMode ? 'invert(1)' : 'brightness(0) invert(0.4)',
-                      cursor: 'pointer',
-                      opacity: 1,
-                    },
-                    '& input[type="date"]': {
-                      colorScheme: darkMode ? 'dark' : 'light',
-                    },
-                    '& .MuiOutlinedInput-root': {
-                      color: darkMode ? '#fff' : '#000',
-                      '& fieldset': {
-                        borderColor: darkMode ? '#555' : '#ccc',
-                      },
-                      '&:hover fieldset': {
-                        borderColor: darkMode ? '#81c784' : '#1976d2',
-                      },
-                    },
-                    '& .MuiInputLabel-root': {
-                      color: darkMode ? '#ccc' : '#444',
-                    },
-                  }}
-                />
+                  size={sz} darkMode={darkMode} InputLabelProps={{ shrink: true }}
+                  InputProps={exp.currentlyWorking ? { endAdornment: <InputAdornment position="end"><Chip label="Present" size="small" color="success" /></InputAdornment> } : {}} />
               </Grid>
-
               <Grid item xs={12} sm={6} md={3}>
-                <FormTextField
-                  label="Location"
-                  value={exp.location || ''}
-                  onChange={(e) => handleExperienceChange(index, 'location', e.target.value)}
-                  placeholder="e.g., San Francisco, CA (Remote)"
-                  size={isSmallMobile ? "small" : "medium"}
-                  darkMode={darkMode}
-                />
+                <FormTextField label="Location" value={exp.location || ''}
+                  onChange={(e) => handleNestedArrayChange('experiences', index, 'location', e.target.value)}
+                  placeholder="e.g., San Francisco, CA (Remote)" size={sz} darkMode={darkMode} />
               </Grid>
-
               <Grid item xs={12} sm={6} md={3}>
                 <Box sx={{ display: 'flex', alignItems: 'center', height: '100%', pt: isSmallMobile ? 1 : 0 }}>
                   <FormControlLabel
                     control={
-                      <Checkbox
-                        checked={exp.currentlyWorking || false}
+                      <Checkbox checked={exp.currentlyWorking || false} color="primary"
                         onChange={(e) => {
-                          handleExperienceChange(index, 'currentlyWorking', e.target.checked);
-                          if (e.target.checked) {
-                            handleExperienceChange(index, 'endDate', '');
-                          }
-                        }}
-                        color="primary"
-                      />
+                          handleNestedArrayChange('experiences', index, 'currentlyWorking', e.target.checked);
+                          if (e.target.checked) handleNestedArrayChange('experiences', index, 'endDate', '');
+                        }} />
                     }
                     label="I currently work here"
                   />
                 </Box>
               </Grid>
 
-              {/* Skills Section for this Experience */}
-              <Grid item xs={12}>
-                {renderSkillsSection(exp, index)}
-              </Grid>
+              {/* Skills panel */}
+              <Grid item xs={12}>{renderSkillsPanel(exp, index)}</Grid>
 
-              {/* Responsibilities, Achievements & Technologies - ALL IN ONE ROW */}
+              {/* Responsibilities, Achievements, Technologies */}
               <Grid container spacing={3}>
-                <Grid item xs={12} md={4}>
-                  <FormTextField
-                    label="Responsibilities & Duties"
-                    value={exp.responsibilities || ''}
-                    onChange={(e) => handleExperienceChange(index, 'responsibilities', e.target.value)}
-                    error={!!errors[`experiences_${index}_responsibilities`]}
-                    helperText={errors[`experiences_${index}_responsibilities`]}
-                    multiline
-                    rows={4}
-                    placeholder="Describe your main responsibilities and daily tasks..."
-                    size={isSmallMobile ? "small" : "medium"}
-                    darkMode={darkMode}
-                    fullWidth
-                  />
-                </Grid>
-
-                <Grid item xs={12} md={4}>
-                  <FormTextField
-                    label="Key Achievements & Contributions"
-                    value={exp.achievements || ''}
-                    onChange={(e) => handleExperienceChange(index, 'achievements', e.target.value)}
-                    multiline
-                    rows={4}
-                    placeholder="Highlight your key achievements, projects, and impact..."
-                    size={isSmallMobile ? "small" : "medium"}
-                    darkMode={darkMode}
-                    fullWidth
-                  />
-                </Grid>
-
-                <Grid item xs={12} md={4}>
-                  <FormTextField
-                    label="Technologies & Tools Used"
-                    value={exp.technologies || ''}
-                    onChange={(e) => handleExperienceChange(index, 'technologies', e.target.value)}
-                    multiline
-                    rows={4}
-                    placeholder="e.g., React, Node.js, AWS, Python, MongoDB, Docker, Kubernetes..."
-                    size={isSmallMobile ? "small" : "medium"}
-                    darkMode={darkMode}
-                    fullWidth
-                  />
-                </Grid>
+                {[
+                  { label: 'Responsibilities & Duties',       field: 'responsibilities', placeholder: 'Describe your main responsibilities…' },
+                  { label: 'Key Achievements & Contributions',field: 'achievements',     placeholder: 'Highlight your key achievements…'    },
+                  { label: 'Technologies & Tools Used',       field: 'technologies',     placeholder: 'e.g., React, Node.js, AWS, Docker…'  },
+                ].map(({ label, field, placeholder }) => (
+                  <Grid item xs={12} md={4} key={field}>
+                    <FormTextField label={label} value={exp[field] || ''}
+                      onChange={(e) => handleNestedArrayChange('experiences', index, field, e.target.value)}
+                      error={!!errors[`experiences_${index}_${field}`]}
+                      helperText={errors[`experiences_${index}_${field}`]}
+                      multiline rows={4} placeholder={placeholder} size={sz} darkMode={darkMode} fullWidth />
+                  </Grid>
+                ))}
               </Grid>
             </Grid>
-          </Paper>
+          </ExperienceCard>
         </Zoom>
       ))}
 
       {formData.experiences.length === 0 && (
-        <Box sx={{ textAlign: 'center', py: 4 }}>
+        <EmptyStateBox>
           <Work sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
           <Typography color="text.secondary" fontStyle="italic">
             No work experience added yet. Click "Add Experience" to get started!
           </Typography>
-        </Box>
+        </EmptyStateBox>
       )}
     </Box>
   );

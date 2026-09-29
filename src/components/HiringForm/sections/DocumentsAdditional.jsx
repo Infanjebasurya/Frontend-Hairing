@@ -1,234 +1,121 @@
+// src/components/HiringForm/sections/DocumentsAdditional.jsx
 import React from 'react';
 import {
-  Box,
-  Grid,
-  Typography,
-  Divider,
-  Paper,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Button,
-  Chip,
-  InputAdornment,
-  Alert
+  Box, Grid, TextField, FormControl, InputLabel, Select, MenuItem, Button,
+  InputAdornment, Divider,
 } from '@mui/material';
-import {
-  Delete,
-  Add,
-  AttachFile,
-  Description,
-  Language,
-  Interests,
-  CloudUpload,
-  CheckCircle,
-  Warning
-} from '@mui/icons-material';
+import { Add, AttachFile, Description, Language, Interests } from '@mui/icons-material';
 import { Fade } from '@mui/material';
 import { InfoAlert, SectionHeader, FileUpload, ChipList } from '../components/FormComponents';
+import { InputFormPaper, SectionDivider } from './DocumentsAdditional.styles';
+
+const PROFICIENCY_LEVELS = [
+  { value: 'basic',        label: 'Basic'        },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'advanced',     label: 'Advanced'     },
+  { value: 'native',       label: 'Native'       },
+];
 
 const DocumentsAdditional = ({
-  formData,
-  errors,
-  handleInputChange,
-  handleFileUpload,
-  handleAddLanguage,
-  handleRemoveLanguage,
-  handleAddHobby,
-  handleRemoveHobby,
-  darkMode = false,
-  isSmallMobile = false
+  formData, errors, handleInputChange, handleFileUpload,
+  handleAddLanguage, handleRemoveLanguage, handleAddHobby, handleRemoveHobby,
+  darkMode = false, isSmallMobile = false,
 }) => {
-  const proficiencyLevels = [
-    { value: 'basic', label: 'Basic' },
-    { value: 'intermediate', label: 'Intermediate' },
-    { value: 'advanced', label: 'Advanced' },
-    { value: 'native', label: 'Native' }
-  ];
+  const sz = isSmallMobile ? 'small' : 'medium';
 
   return (
-    <Fade in={true} timeout={500}>
+    <Fade in timeout={500}>
       <Box sx={{ mt: 3 }}>
-        <InfoAlert
-          icon={<AttachFile />}
-          title="Documents & Additional Information"
-          darkMode={darkMode}
-          severity="warning"
-        >
+        <InfoAlert icon={<AttachFile />} title="Documents & Additional Information" darkMode={darkMode} severity="warning">
           Upload your resume and cover letter, then complete your profile with languages and hobbies.
         </InfoAlert>
 
-        {/* Documents Section */}
+        {/* ── Documents ─────────────────────────────────────────────────── */}
         <Box sx={{ mb: 4 }}>
-          <SectionHeader
-            icon={<Description />}
-            title="Required Documents"
-          />
-
+          <SectionHeader icon={<Description />} title="Required Documents" />
           <Grid container spacing={2}>
             <Grid item xs={12}>
-              <FileUpload
-                label="Resume / CV"
-                value={formData.resume}
+              <FileUpload label="Resume / CV" value={formData.resume}
                 onChange={(file) => handleFileUpload('resume', file)}
-                error={errors.resume}
-                accept=".pdf,.doc,.docx"
-                required={true}
-                darkMode={darkMode}
-              />
+                error={errors.resume} accept=".pdf,.doc,.docx" required darkMode={darkMode} />
             </Grid>
-
             <Grid item xs={12}>
-              <FileUpload
-                label="Cover Letter"
-                value={formData.coverLetter}
+              <FileUpload label="Cover Letter" value={formData.coverLetter}
                 onChange={(file) => handleFileUpload('coverLetter', file)}
-                error={errors.coverLetter}
-                accept=".pdf,.doc,.docx"
-                required={false}
-                darkMode={darkMode}
-              />
+                error={errors.coverLetter} accept=".pdf,.doc,.docx" darkMode={darkMode} />
             </Grid>
           </Grid>
         </Box>
 
         <Divider sx={{ my: 4 }} />
 
-        {/* Languages Section */}
+        {/* ── Languages ─────────────────────────────────────────────────── */}
         <Box sx={{ mb: 4 }}>
-          <SectionHeader
-            icon={<Language />}
-            title="Languages"
-          />
-
-          <Paper sx={{
-            p: 2,
-            mb: 2,
-            background: darkMode ? 'rgba(15, 23, 42, 0.64)' : '#ffffff',
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 2,
-          }}>
-            <Grid container spacing={2} alignItems="end">
+          <SectionHeader icon={<Language />} title="Languages" />
+          <InputFormPaper>
+            <Grid container spacing={2} alignItems="flex-end">
               <Grid item xs={12} sm={5}>
-                <TextField
-                  fullWidth
-                  label="Language"
-                  value={formData.newLanguage}
+                <TextField fullWidth label="Language" value={formData.newLanguage}
                   onChange={(e) => handleInputChange('newLanguage', e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') handleAddLanguage();
-                  }}
-                  variant="outlined"
-                  size={isSmallMobile ? "small" : "medium"}
-                  placeholder="e.g., Spanish, French, Mandarin"
-                />
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddLanguage()}
+                  variant="outlined" size={sz} placeholder="e.g., Spanish, French, Mandarin" />
               </Grid>
               <Grid item xs={12} sm={4}>
-                <FormControl fullWidth size={isSmallMobile ? "small" : "medium"}>
+                <FormControl fullWidth size={sz}>
                   <InputLabel>Proficiency Level</InputLabel>
-                  <Select
-                    value={formData.proficiency}
-                    label="Proficiency Level"
-                    onChange={(e) => handleInputChange('proficiency', e.target.value)}
-                    variant="outlined"
-                  >
-                    {proficiencyLevels.map((level) => (
-                      <MenuItem key={level.value} value={level.value}>
-                        {level.label}
-                      </MenuItem>
+                  <Select value={formData.proficiency} label="Proficiency Level"
+                    onChange={(e) => handleInputChange('proficiency', e.target.value)} variant="outlined">
+                    {PROFICIENCY_LEVELS.map((l) => (
+                      <MenuItem key={l.value} value={l.value}>{l.label}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Grid>
               <Grid item xs={12} sm={3}>
-                <Button
-                  variant="contained"
-                  onClick={handleAddLanguage}
-                  fullWidth
-                  disabled={!formData.newLanguage.trim()}
-                  startIcon={<Add />}
-                  sx={{ height: isSmallMobile ? '40px' : '56px' }}
-                  size={isSmallMobile ? "small" : "medium"}
-                >
+                <Button variant="contained" onClick={handleAddLanguage} fullWidth
+                  disabled={!formData.newLanguage.trim()} startIcon={<Add />}
+                  sx={{ height: isSmallMobile ? 40 : 56 }} size={sz}>
                   Add
                 </Button>
               </Grid>
             </Grid>
-          </Paper>
+          </InputFormPaper>
 
           {formData.languages.length > 0 && (
             <ChipList
-              items={formData.languages.map(lang => `${lang.name} (${lang.proficiency})`)}
-              onRemove={handleRemoveLanguage}
-              color="secondary"
-              darkMode={darkMode}
-              size={isSmallMobile ? "small" : "medium"}
+              items={formData.languages.map((l) => `${l.name || l.language} (${l.proficiency})`)}
+              onRemove={handleRemoveLanguage} color="secondary" darkMode={darkMode} size={sz}
             />
           )}
         </Box>
 
         <Divider sx={{ my: 4 }} />
 
-        {/* Hobbies Section */}
+        {/* ── Hobbies ───────────────────────────────────────────────────── */}
         <Box>
-          <SectionHeader
-            icon={<Interests />}
-            title="Hobbies & Interests"
-          />
-
-          <Paper sx={{
-            p: 2,
-            mb: 2,
-            background: darkMode ? 'rgba(15, 23, 42, 0.64)' : '#ffffff',
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 2,
-          }}>
-            <Grid container spacing={2} alignItems="end">
+          <SectionHeader icon={<Interests />} title="Hobbies & Interests" />
+          <InputFormPaper>
+            <Grid container spacing={2} alignItems="flex-end">
               <Grid item xs={12} sm={9}>
-                <TextField
-                  fullWidth
-                  label="Hobby/Interest"
-                  value={formData.newHobby}
+                <TextField fullWidth label="Hobby/Interest" value={formData.newHobby}
                   onChange={(e) => handleInputChange('newHobby', e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') handleAddHobby();
-                  }}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start"><Interests color="primary" /></InputAdornment>,
-                  }}
-                  variant="outlined"
-                  size={isSmallMobile ? "small" : "medium"}
-                  placeholder="e.g., Photography, Hiking, Reading, Gaming"
-                />
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddHobby()}
+                  InputProps={{ startAdornment: <InputAdornment position="start"><Interests color="primary" /></InputAdornment> }}
+                  variant="outlined" size={sz} placeholder="e.g., Photography, Hiking, Reading" />
               </Grid>
               <Grid item xs={12} sm={3}>
-                <Button
-                  variant="contained"
-                  onClick={handleAddHobby}
-                  fullWidth
-                  disabled={!formData.newHobby.trim()}
-                  startIcon={<Add />}
-                  sx={{ height: isSmallMobile ? '40px' : '56px' }}
-                  size={isSmallMobile ? "small" : "medium"}
-                >
+                <Button variant="contained" onClick={handleAddHobby} fullWidth
+                  disabled={!formData.newHobby.trim()} startIcon={<Add />}
+                  sx={{ height: isSmallMobile ? 40 : 56 }} size={sz}>
                   Add
                 </Button>
               </Grid>
             </Grid>
-          </Paper>
+          </InputFormPaper>
 
           {formData.hobbies.length > 0 && (
-            <ChipList
-              items={formData.hobbies}
-              onRemove={handleRemoveHobby}
-              color="primary"
-              darkMode={darkMode}
-              size={isSmallMobile ? "small" : "medium"}
-            />
+            <ChipList items={formData.hobbies} onRemove={handleRemoveHobby}
+              color="primary" darkMode={darkMode} size={sz} />
           )}
         </Box>
       </Box>

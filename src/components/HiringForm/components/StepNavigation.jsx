@@ -1,82 +1,65 @@
+// src/components/HiringForm/components/StepNavigation.jsx
 import React from 'react';
+import { CircularProgress } from '@mui/material';
+import { KeyboardArrowLeft, KeyboardArrowRight, CheckCircle, Save } from '@mui/icons-material';
 import {
-  Box,
-  Button,
-  CircularProgress
-} from '@mui/material';
-import {
-  KeyboardArrowLeft,
-  KeyboardArrowRight,
-  CheckCircle
-} from '@mui/icons-material';
+  NavContainer, RightGroup, BackButton, SaveDraftButton, NextButton, SubmitButton,
+} from './StepNavigation.styles';
 
 const StepNavigation = ({
-  activeStep,
-  totalSteps,
-  onBack,
-  onNext,
-  onSubmit,
+  activeStep, totalSteps,
+  onBack, onNext, onSubmit,
   isSubmitting = false,
   isMobile = false,
-  isSmallMobile = false
-}) => {
-  return (
-    <Box sx={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      mt: 4,
-      gap: 2,
-      flexDirection: isMobile ? 'column' : 'row'
-    }}>
-      <Button
-        disabled={activeStep === 0}
-        onClick={onBack}
-        variant="outlined"
-        size={isSmallMobile ? "small" : "large"}
-        sx={{
-          minWidth: isMobile ? '100%' : 120,
-          borderRadius: 2
-        }}
-        startIcon={<KeyboardArrowLeft />}
-      >
-        Back
-      </Button>
+  isSmallMobile = false,
+  onSaveDraft,
+}) => (
+  <NavContainer>
+    <BackButton
+      variant="outlined"
+      onClick={onBack}
+      disabled={activeStep === 0 || isSubmitting}
+      startIcon={<KeyboardArrowLeft />}
+      size={isSmallMobile ? 'small' : 'medium'}
+    >
+      Back
+    </BackButton>
+
+    <RightGroup>
+      {activeStep !== totalSteps - 1 && onSaveDraft && (
+        <SaveDraftButton
+          variant="outlined"
+          onClick={onSaveDraft}
+          disabled={isSubmitting}
+          startIcon={<Save />}
+          size={isSmallMobile ? 'small' : 'medium'}
+        >
+          Save Draft
+        </SaveDraftButton>
+      )}
 
       {activeStep === totalSteps - 1 ? (
-        <Button
+        <SubmitButton
           variant="contained"
           onClick={onSubmit}
-          size={isSmallMobile ? "small" : "large"}
           disabled={isSubmitting}
-          sx={{
-            minWidth: isMobile ? '100%' : 200,
-            borderRadius: 2,
-            background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
-            boxShadow: '0 3px 5px 2px rgba(76, 175, 80, .3)',
-            '&:hover': {
-              background: 'linear-gradient(45deg, #43a047 30%, #4caf50 90%)',
-            }
-          }}
-          startIcon={isSubmitting ? <CircularProgress size={20} /> : <CheckCircle />}
+          endIcon={isSubmitting ? <CircularProgress size={16} /> : <CheckCircle />}
+          size={isSmallMobile ? 'small' : 'medium'}
         >
-          {isSubmitting ? 'Submitting...' : 'Submit Application'}
-        </Button>
+          {isSubmitting ? 'Submitting…' : 'Submit Application'}
+        </SubmitButton>
       ) : (
-        <Button
+        <NextButton
           variant="contained"
           onClick={onNext}
-          size={isSmallMobile ? "small" : "large"}
-          sx={{
-            minWidth: isMobile ? '100%' : 120,
-            borderRadius: 2
-          }}
           endIcon={<KeyboardArrowRight />}
+          size={isSmallMobile ? 'small' : 'medium'}
         >
           Next
-        </Button>
+        </NextButton>
       )}
-    </Box>
-  );
-};
+    </RightGroup>
+  </NavContainer>
+);
 
 export default StepNavigation;

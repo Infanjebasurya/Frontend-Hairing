@@ -1,20 +1,9 @@
+// src/components/Common/Avatar.jsx
 import React from 'react';
-import { Avatar as MuiAvatar } from '@mui/material';
+import { StyledAvatar } from './Avatar.styles';
 
-const Avatar = ({ icon, alt = 'Avatar', size = 32 }) => {
-  return (
-    <MuiAvatar
-      sx={{
-        bgcolor: 'primary.main',
-        width: size,
-        height: size,
-        fontSize: '0.875rem',
-        fontWeight: 'bold',
-      }}
-    >
-      {icon}
-    </MuiAvatar>
-  );
-};
+const Avatar = ({ icon, alt = 'Avatar', size = 32 }) => (
+  <StyledAvatar avatarsize={size} alt={alt}>{icon}</StyledAvatar>
+);
 
 export default Avatar;

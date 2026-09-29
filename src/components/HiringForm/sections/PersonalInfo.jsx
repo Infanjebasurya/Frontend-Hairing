@@ -1,590 +1,157 @@
+// src/components/HiringForm/sections/PersonalInfo.jsx
 import React from 'react';
 import {
-  Box,
-  Grid,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormHelperText,
-  InputAdornment,
-  useMediaQuery,
-  Typography
+  Box, Grid, Select, MenuItem, InputAdornment, FormHelperText,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
-import {
-  Person,
-  Work,
-  Email,
-  Phone,
-  LocationOn,
-  LinkedIn,
-  Language,
-  Public
-} from '@mui/icons-material';
+import { Person, Work, Email, Phone, LocationOn, LinkedIn, Language, Public } from '@mui/icons-material';
 import { Fade } from '@mui/material';
 import { InfoAlert } from '../components/FormComponents';
 import { formatPhoneNumber, normalizeUrl } from '../utils/validation';
+import { SectionFormField, SectionFormControl, RequiredNote } from './PersonalInfo.styles';
+
+const JOB_TITLES = [
+  'Senior Software Engineer','Frontend Developer','Backend Developer','Full Stack Developer',
+  'DevOps Engineer','Data Scientist','Machine Learning Engineer','Product Manager',
+  'UI/UX Designer','Project Manager','Quality Assurance Engineer','System Administrator',
+  'Security Engineer','Mobile Developer','Technical Lead','Software Architect',
+];
 
 const PersonalInfo = ({
-  formData,
-  errors,
-  handleInputChange,
-  darkMode = false,
-  touched = {},
-  handleBlur
+  formData, errors, handleInputChange, darkMode = false, touched = {}, handleBlur,
 }) => {
-  const theme = useTheme();
-  const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  const jobTitles = [
-    'Senior Software Engineer',
-    'Frontend Developer',
-    'Backend Developer',
-    'Full Stack Developer',
-    'DevOps Engineer',
-    'Data Scientist',
-    'Machine Learning Engineer',
-    'Product Manager',
-    'UI/UX Designer',
-    'Project Manager',
-    'Quality Assurance Engineer',
-    'System Administrator',
-    'Security Engineer',
-    'Mobile Developer',
-    'Technical Lead',
-    'Software Architect'
-  ];
-
   const handleFieldChange = (field, value) => {
-    let processedValue = value;
-
-    // Apply formatting/normalization based on field type
-    switch (field) {
-      case 'contactNumber':
-        processedValue = formatPhoneNumber(value);
-        break;
-      case 'linkedin':
-      case 'portfolio':
-      case 'website':
-        if (value) {
-          processedValue = normalizeUrl(value, field === 'linkedin' ? 'linkedin' : '');
-        }
-        break;
-      default:
-        break;
-    }
-
-    handleInputChange(field, processedValue);
+    let v = value;
+    if (field === 'contactNumber')       v = formatPhoneNumber(value);
+    else if (['linkedin','portfolio','website'].includes(field) && value)
+      v = normalizeUrl(value, field === 'linkedin' ? 'linkedin' : '');
+    handleInputChange(field, v);
   };
 
-  const handleFieldBlur = (field) => {
-    handleBlur?.(field);
+  const req = {
+    firstName: 'Required, max 50 characters',   lastName: 'Required, max 50 characters',
+    jobTitle:  'Required, select from list',     email: 'Required, valid email format',
+    contactNumber: 'Required, valid phone number', location: 'Optional, max 100 characters',
+    linkedin: 'Required, valid LinkedIn URL',    portfolio: 'Optional, valid URL format',
+    website: 'Optional, valid URL format',
   };
 
-  // Helper function to get requirement text for each field
-  const getRequirementText = (fieldName) => {
-    const requirements = {
-      firstName: 'Required, max 50 characters',
-      lastName: 'Required, max 50 characters',
-      jobTitle: 'Required, select from list',
-      email: 'Required, valid email format',
-      contactNumber: 'Required, valid phone number',
-      location: 'Optional, max 100 characters',
-      linkedin: 'Required, valid LinkedIn URL',
-      portfolio: 'Optional, valid URL format',
-      website: 'Optional, valid URL format'
-    };
-    return requirements[fieldName] || '';
-  };
-
-  // Helper function to check if field has requirement error
-  const hasRequirementError = (fieldName) => Boolean(errors[fieldName]);
+  /** Shared helper-text: error message or requirement hint */
+  const ht = (f) => errors[f] || req[f] || '';
 
   return (
-    <Fade in={true} timeout={500}>
+    <Fade in timeout={500}>
       <Box sx={{ mt: { xs: 1, sm: 2, md: 3 } }}>
-        <InfoAlert
-          icon={<Person />}
-          title="Personal Information"
-          darkMode={darkMode}
-        >
-          Please provide your personal and contact information. All fields marked with * are required. LinkedIn profile is mandatory for professional verification.
+        <InfoAlert icon={<Person />} title="Personal Information" darkMode={darkMode}>
+          Please provide your personal and contact information. All fields marked with * are required.
+          LinkedIn profile is mandatory for professional verification.
         </InfoAlert>
 
-        <Grid container spacing={isSmallMobile ? 1.5 : 2}>
-          {/* First Name & Last Name */}
+        <Grid container spacing={2}>
+          {/* First + Last Name */}
           <Grid item xs={12} sm={6}>
-            <TextField
-              required
-              fullWidth
-              label="First Name"
-              name="firstName"
-              value={formData.firstName}
+            <SectionFormField required fullWidth label="First Name" name="firstName"
+              value={formData.firstName} haserror={!!errors.firstName ? 1 : 0}
               onChange={(e) => handleFieldChange('firstName', e.target.value)}
-              onBlur={() => handleFieldBlur('firstName')}
-              error={!!errors.firstName}
-              helperText={
-                errors.firstName
-                  ? errors.firstName 
-                  : getRequirementText('firstName')
-              }
-              variant="outlined"
-              size={isSmallMobile ? "small" : "medium"}
-              inputProps={{
-                maxLength: 50
-              }}
-              sx={{
-                '& .MuiInputLabel-root': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem'
-                },
-                '& .MuiOutlinedInput-input': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem',
-                  padding: isSmallMobile ? '10px 14px' : '16.5px 14px'
-                },
-                '& .MuiFormHelperText-root': {
-                  color: hasRequirementError('firstName') ? 'error.main' : 'text.secondary',
-                  fontSize: isSmallMobile ? '0.7rem' : '0.75rem'
-                }
-              }}
-            />
+              onBlur={() => handleBlur?.('firstName')}
+              error={!!errors.firstName} helperText={ht('firstName')}
+              inputProps={{ maxLength: 50 }} />
           </Grid>
           <Grid item xs={12} sm={6}>
-            <TextField
-              required
-              fullWidth
-              label="Last Name"
-              name="lastName"
-              value={formData.lastName}
+            <SectionFormField required fullWidth label="Last Name" name="lastName"
+              value={formData.lastName} haserror={!!errors.lastName ? 1 : 0}
               onChange={(e) => handleFieldChange('lastName', e.target.value)}
-              onBlur={() => handleFieldBlur('lastName')}
-              error={!!errors.lastName}
-              helperText={
-                errors.lastName
-                  ? errors.lastName 
-                  : getRequirementText('lastName')
-              }
-              variant="outlined"
-              size={isSmallMobile ? "small" : "medium"}
-              inputProps={{
-                maxLength: 50
-              }}
-              sx={{
-                '& .MuiInputLabel-root': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem'
-                },
-                '& .MuiOutlinedInput-input': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem',
-                  padding: isSmallMobile ? '10px 14px' : '16.5px 14px'
-                },
-                '& .MuiFormHelperText-root': {
-                  color: hasRequirementError('lastName') ? 'error.main' : 'text.secondary',
-                  fontSize: isSmallMobile ? '0.7rem' : '0.75rem'
-                }
-              }}
-            />
+              onBlur={() => handleBlur?.('lastName')}
+              error={!!errors.lastName} helperText={ht('lastName')}
+              inputProps={{ maxLength: 50 }} />
           </Grid>
 
-          {/* Desired Position - Full Width */}
+          {/* Job title select */}
           <Grid item xs={12}>
-            <FormControl
-              fullWidth
-              required
-              error={!!errors.jobTitle}
-              variant="outlined"
-              size={isSmallMobile ? "small" : "medium"}
-            >
-              <InputLabel
-                id="desired-position-label"
-                sx={{
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem',
-                  backgroundColor: darkMode ? '#1e1e1e' : 'white',
-                  px: 0.5
-                }}
-              >
-                Desired Position *
-              </InputLabel>
+            <SectionFormControl fullWidth required error={!!errors.jobTitle} variant="outlined">
+              <label style={{ fontSize: 'inherit', marginBottom: 4 }}>Desired Position *</label>
               <Select
-                labelId="desired-position-label"
-                name="jobTitle"
-                value={formData.jobTitle}
-                label="Desired Position *"
+                name="jobTitle" value={formData.jobTitle}
                 onChange={(e) => handleFieldChange('jobTitle', e.target.value)}
-                onBlur={() => handleFieldBlur('jobTitle')}
+                onBlur={() => handleBlur?.('jobTitle')}
                 displayEmpty
-                sx={{
-                  '& .MuiSelect-select': {
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: isSmallMobile ? '10px 14px' : '16.5px 14px',
-                    fontSize: isSmallMobile ? '0.875rem' : '1rem',
-                    '& .MuiBox-root': {
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      width: '100%'
-                    }
-                  }
-                }}
-                renderValue={(selected) => {
-                  if (!selected) {
-                    return (
-                      <Box sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        color: 'text.disabled',
-                        fontSize: isSmallMobile ? '0.875rem' : '1rem'
-                      }}>
-                        <Work fontSize={isSmallMobile ? "small" : "medium"} />
-                        Select a position
-                      </Box>
-                    );
-                  }
-                  return (
-                    <Box sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      fontSize: isSmallMobile ? '0.875rem' : '1rem'
-                    }}>
-                      <Work fontSize={isSmallMobile ? "small" : "medium"} />
-                      {selected}
-                    </Box>
-                  );
-                }}
-                MenuProps={{
-                  PaperProps: {
-                    sx: {
-                      backgroundColor: darkMode ? '#1e1e1e' : '#ffffff',
-                      color: darkMode ? 'white' : 'inherit',
-                      maxHeight: isSmallMobile ? 250 : 300,
-                      '& .MuiMenuItem-root': {
-                        padding: isSmallMobile ? '8px 12px' : '8px 16px',
-                        minHeight: 'auto',
-                        fontSize: isSmallMobile ? '0.875rem' : '1rem',
-                        '&:hover': {
-                          backgroundColor: darkMode ? 'rgba(144, 202, 249, 0.1)' : 'rgba(25, 118, 210, 0.1)',
-                        },
-                        '&.Mui-selected': {
-                          backgroundColor: darkMode ? 'rgba(144, 202, 249, 0.2)' : 'rgba(25, 118, 210, 0.2)',
-                        }
-                      }
-                    }
-                  }
-                }}
+                renderValue={(v) => v || <span style={{ opacity: 0.5 }}>Select a position</span>}
               >
-                {jobTitles.map((title) => (
-                  <MenuItem
-                    key={title}
-                    value={title}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      fontSize: isSmallMobile ? '0.875rem' : '1rem'
-                    }}
-                  >
-                    <Work fontSize={isSmallMobile ? "small" : "medium"} />
-                    {title}
-                  </MenuItem>
+                {JOB_TITLES.map((t) => (
+                  <MenuItem key={t} value={t}><Work sx={{ mr: 1, fontSize: 18 }} />{t}</MenuItem>
                 ))}
               </Select>
-              <FormHelperText 
-                sx={{ 
-                  fontSize: isSmallMobile ? '0.7rem' : '0.75rem',
-                  color: hasRequirementError('jobTitle') ? 'error.main' : 'text.secondary'
-                }}
-              >
-                {errors.jobTitle ? errors.jobTitle : getRequirementText('jobTitle')}
-              </FormHelperText>
-            </FormControl>
+              <FormHelperText>{ht('jobTitle')}</FormHelperText>
+            </SectionFormControl>
           </Grid>
 
-          {/* Email & Phone */}
+          {/* Email */}
           <Grid item xs={12} sm={6}>
-            <TextField
-              required
-              fullWidth
-              label="Email Address"
-              name="email"
-              type="email"
-              value={formData.email}
+            <SectionFormField required fullWidth type="email" label="Email Address"
+              name="email" value={formData.email} haserror={!!errors.email ? 1 : 0}
               onChange={(e) => handleFieldChange('email', e.target.value)}
-              onBlur={() => handleFieldBlur('email')}
-              error={!!errors.email}
-              helperText={
-                errors.email
-                  ? errors.email 
-                  : getRequirementText('email')
-              }
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Email 
-                      fontSize={isSmallMobile ? "small" : "medium"} 
-                      color={errors.email && touched.email ? "error" : "primary"} 
-                    />
-                  </InputAdornment>
-                ),
-              }}
-              variant="outlined"
-              size={isSmallMobile ? "small" : "medium"}
+              onBlur={() => handleBlur?.('email')}
+              error={!!errors.email} helperText={ht('email')}
               placeholder="your.email@example.com"
-              sx={{
-                '& .MuiInputLabel-root': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem'
-                },
-                '& .MuiOutlinedInput-input': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem',
-                  padding: isSmallMobile ? '10px 14px' : '16.5px 14px'
-                },
-                '& .MuiFormHelperText-root': {
-                  color: hasRequirementError('email') ? 'error.main' : 'text.secondary',
-                  fontSize: isSmallMobile ? '0.7rem' : '0.75rem'
-                }
-              }}
-            />
+              InputProps={{ startAdornment: <InputAdornment position="start"><Email color={errors.email && touched.email ? 'error' : 'primary'} /></InputAdornment> }} />
           </Grid>
 
+          {/* Phone */}
           <Grid item xs={12} sm={6}>
-            <TextField
-              required
-              fullWidth
-              label="Contact Number"
-              name="contactNumber"
-              value={formData.contactNumber}
+            <SectionFormField required fullWidth label="Contact Number" name="contactNumber"
+              value={formData.contactNumber} haserror={!!errors.contactNumber ? 1 : 0}
               onChange={(e) => handleFieldChange('contactNumber', e.target.value)}
-              onBlur={() => handleFieldBlur('contactNumber')}
-              error={!!errors.contactNumber}
-              helperText={
-                errors.contactNumber
-                  ? errors.contactNumber 
-                  : getRequirementText('contactNumber')
-              }
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Phone 
-                      fontSize={isSmallMobile ? "small" : "medium"} 
-                      color={errors.contactNumber && touched.contactNumber ? "error" : "primary"} 
-                    />
-                  </InputAdornment>
-                ),
-              }}
-              variant="outlined"
-              size={isSmallMobile ? "small" : "medium"}
-              placeholder="+1 (555) 123-4567"
-              inputProps={{
-                maxLength: 25
-              }}
-              sx={{
-                '& .MuiInputLabel-root': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem'
-                },
-                '& .MuiOutlinedInput-input': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem',
-                  padding: isSmallMobile ? '10px 14px' : '16.5px 14px'
-                },
-                '& .MuiFormHelperText-root': {
-                  color: hasRequirementError('contactNumber') ? 'error.main' : 'text.secondary',
-                  fontSize: isSmallMobile ? '0.7rem' : '0.75rem'
-                }
-              }}
-            />
+              onBlur={() => handleBlur?.('contactNumber')}
+              error={!!errors.contactNumber} helperText={ht('contactNumber')}
+              placeholder="+1 (555) 123-4567" inputProps={{ maxLength: 25 }}
+              InputProps={{ startAdornment: <InputAdornment position="start"><Phone color={errors.contactNumber && touched.contactNumber ? 'error' : 'primary'} /></InputAdornment> }} />
           </Grid>
 
-          {/* Location - Full Width */}
+          {/* Location */}
           <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Current Location"
-              name="location"
-              value={formData.location}
+            <SectionFormField fullWidth label="Current Location" name="location"
+              value={formData.location} haserror={!!errors.location ? 1 : 0}
               onChange={(e) => handleFieldChange('location', e.target.value)}
-              onBlur={() => handleFieldBlur('location')}
-              error={!!errors.location}
-              helperText={
-                errors.location
-                  ? errors.location 
-                  : getRequirementText('location')
-              }
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LocationOn 
-                      fontSize={isSmallMobile ? "small" : "medium"} 
-                      color={errors.location && touched.location ? "error" : "primary"} 
-                    />
-                  </InputAdornment>
-                ),
-              }}
-              variant="outlined"
-              size={isSmallMobile ? "small" : "medium"}
-              placeholder="City, Country"
-              inputProps={{
-                maxLength: 100
-              }}
-              sx={{
-                '& .MuiInputLabel-root': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem'
-                },
-                '& .MuiOutlinedInput-input': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem',
-                  padding: isSmallMobile ? '10px 14px' : '16.5px 14px'
-                },
-                '& .MuiFormHelperText-root': {
-                  color: hasRequirementError('location') ? 'error.main' : 'text.secondary',
-                  fontSize: isSmallMobile ? '0.7rem' : '0.75rem'
-                }
-              }}
-            />
+              onBlur={() => handleBlur?.('location')}
+              error={!!errors.location} helperText={ht('location')}
+              placeholder="City, Country" inputProps={{ maxLength: 100 }}
+              InputProps={{ startAdornment: <InputAdornment position="start"><LocationOn color={errors.location && touched.location ? 'error' : 'primary'} /></InputAdornment> }} />
           </Grid>
 
-          {/* LinkedIn - Full Width */}
+          {/* LinkedIn */}
           <Grid item xs={12}>
-            <TextField
-              fullWidth
-              required
-              label="LinkedIn Profile"
-              name="linkedin"
-              value={formData.linkedin}
+            <SectionFormField required fullWidth label="LinkedIn Profile" name="linkedin"
+              value={formData.linkedin} haserror={!!errors.linkedin ? 1 : 0}
               onChange={(e) => handleFieldChange('linkedin', e.target.value)}
-              onBlur={() => handleFieldBlur('linkedin')}
-              error={!!errors.linkedin}
-              helperText={
-                errors.linkedin
-                  ? errors.linkedin 
-                  : getRequirementText('linkedin')
-              }
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LinkedIn 
-                      fontSize={isSmallMobile ? "small" : "medium"} 
-                      color={errors.linkedin && touched.linkedin ? "error" : "primary"} 
-                    />
-                  </InputAdornment>
-                ),
-              }}
-              variant="outlined"
-              size={isSmallMobile ? "small" : "medium"}
+              onBlur={() => handleBlur?.('linkedin')}
+              error={!!errors.linkedin} helperText={ht('linkedin')}
               placeholder="https://linkedin.com/in/yourprofile"
-              sx={{
-                '& .MuiInputLabel-root': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem'
-                },
-                '& .MuiOutlinedInput-input': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem',
-                  padding: isSmallMobile ? '10px 14px' : '16.5px 14px'
-                },
-                '& .MuiFormHelperText-root': {
-                  color: hasRequirementError('linkedin') ? 'error.main' : 'text.secondary',
-                  fontSize: isSmallMobile ? '0.7rem' : '0.75rem'
-                }
-              }}
-            />
+              InputProps={{ startAdornment: <InputAdornment position="start"><LinkedIn color={errors.linkedin && touched.linkedin ? 'error' : 'primary'} /></InputAdornment> }} />
           </Grid>
 
-          {/* Portfolio & Website */}
+          {/* Portfolio */}
           <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Portfolio Website"
-              name="portfolio"
-              value={formData.portfolio}
+            <SectionFormField fullWidth label="Portfolio Website" name="portfolio"
+              value={formData.portfolio} haserror={!!errors.portfolio ? 1 : 0}
               onChange={(e) => handleFieldChange('portfolio', e.target.value)}
-              onBlur={() => handleFieldBlur('portfolio')}
-              error={!!errors.portfolio}
-              helperText={
-                errors.portfolio
-                  ? errors.portfolio 
-                  : getRequirementText('portfolio')
-              }
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Language 
-                      fontSize={isSmallMobile ? "small" : "medium"} 
-                      color={errors.portfolio && touched.portfolio ? "error" : "primary"} 
-                    />
-                  </InputAdornment>
-                ),
-              }}
-              variant="outlined"
-              size={isSmallMobile ? "small" : "medium"}
+              onBlur={() => handleBlur?.('portfolio')}
+              error={!!errors.portfolio} helperText={ht('portfolio')}
               placeholder="https://yourportfolio.com"
-              sx={{
-                '& .MuiInputLabel-root': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem'
-                },
-                '& .MuiOutlinedInput-input': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem',
-                  padding: isSmallMobile ? '10px 14px' : '16.5px 14px'
-                },
-                '& .MuiFormHelperText-root': {
-                  color: hasRequirementError('portfolio') ? 'error.main' : 'text.secondary',
-                  fontSize: isSmallMobile ? '0.7rem' : '0.75rem'
-                }
-              }}
-            />
+              InputProps={{ startAdornment: <InputAdornment position="start"><Language color={errors.portfolio && touched.portfolio ? 'error' : 'primary'} /></InputAdornment> }} />
           </Grid>
 
+          {/* Website */}
           <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              label="Personal Website/Blog"
-              name="website"
-              value={formData.website}
+            <SectionFormField fullWidth label="Personal Website/Blog" name="website"
+              value={formData.website} haserror={!!errors.website ? 1 : 0}
               onChange={(e) => handleFieldChange('website', e.target.value)}
-              onBlur={() => handleFieldBlur('website')}
-              error={!!errors.website}
-              helperText={
-                errors.website
-                  ? errors.website 
-                  : getRequirementText('website')
-              }
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Public 
-                      fontSize={isSmallMobile ? "small" : "medium"} 
-                      color={errors.website && touched.website ? "error" : "primary"} 
-                    />
-                  </InputAdornment>
-                ),
-              }}
-              variant="outlined"
-              size={isSmallMobile ? "small" : "medium"}
+              onBlur={() => handleBlur?.('website')}
+              error={!!errors.website} helperText={ht('website')}
               placeholder="https://yourwebsite.com"
-              sx={{
-                '& .MuiInputLabel-root': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem'
-                },
-                '& .MuiOutlinedInput-input': {
-                  fontSize: isSmallMobile ? '0.875rem' : '1rem',
-                  padding: isSmallMobile ? '10px 14px' : '16.5px 14px'
-                },
-                '& .MuiFormHelperText-root': {
-                  color: hasRequirementError('website') ? 'error.main' : 'text.secondary',
-                  fontSize: isSmallMobile ? '0.7rem' : '0.75rem'
-                }
-              }}
-            />
+              InputProps={{ startAdornment: <InputAdornment position="start"><Public color={errors.website && touched.website ? 'error' : 'primary'} /></InputAdornment> }} />
           </Grid>
         </Grid>
 
-        {/* Required Fields Note */}
-        <Box sx={{ mt: 2, textAlign: 'center' }}>
-          <Typography 
-            variant="caption" 
-            color="text.secondary"
-            sx={{ fontSize: isSmallMobile ? '0.7rem' : '0.75rem' }}
-          >
-            * Required fields
-          </Typography>
-        </Box>
+        <RequiredNote variant="caption">* Required fields</RequiredNote>
       </Box>
     </Fade>
   );
