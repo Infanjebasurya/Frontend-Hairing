@@ -40,7 +40,7 @@ import AdminDashboard from './Admin/AdminDashboard';
 // Candidate sub-pages
 import CandidateDetails from './components/Layout/JobInterview/CandidateInterview/CandidateDetails';
 import EditCandidate from './components/Layout/JobInterview/CandidateInterview/EditCandidate';
-import AddCandidate from './components/Layout/JobInterview/CandidateInterview/AddCandidate';
+import AddCandidatePage from './components/Layout/JobInterview/CandidateInterview/AddCandidatePage';
 import DeleteConfirmation from './components/Layout/JobInterview/CandidateInterview/DeleteConfirmation';
 import StatusChangeDialog from './components/Layout/JobInterview/CandidateInterview/StatusChangeDialog';
 import CandidateDetailsPage from './components/Layout/JobInterview/CandidateInterview/CandidateDetailsPage/CandidateDetailsPage';
@@ -318,7 +318,7 @@ function MainAppContent() {
           element={
             <ProtectedRoute requireUser>
               <MainLayout {...layoutProps}>
-                <AddCandidate />
+                <AddCandidatePage />
               </MainLayout>
             </ProtectedRoute>
           }
